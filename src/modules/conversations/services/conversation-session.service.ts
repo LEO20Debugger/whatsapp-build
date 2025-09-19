@@ -1,16 +1,16 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { RedisService } from '../../../common/redis/redis.service';
+import { Injectable, Logger } from "@nestjs/common";
+import { RedisService } from "../../../common/redis/redis.service";
 import {
   ConversationSession,
   ConversationState,
   SessionStorageOptions,
-} from '../types/conversation.types';
+} from "../types/conversation.types";
 
 @Injectable()
 export class ConversationSessionService {
   private readonly logger = new Logger(ConversationSessionService.name);
   private readonly defaultTtl = 3600; // 1 hour in seconds
-  private readonly keyPrefix = 'conversation:session:';
+  private readonly keyPrefix = "conversation:session:";
 
   constructor(private readonly redisService: RedisService) {}
 
@@ -28,7 +28,7 @@ export class ConversationSessionService {
       }
 
       const session = JSON.parse(sessionData) as ConversationSession;
-      
+
       // Convert lastActivity back to Date object
       session.lastActivity = new Date(session.lastActivity);
 
@@ -41,7 +41,7 @@ export class ConversationSessionService {
     } catch (error) {
       this.logger.error(
         `Failed to get session for phone number: ${phoneNumber}`,
-        { error: error.message }
+        { error: error.message },
       );
       return null;
     }
@@ -52,7 +52,7 @@ export class ConversationSessionService {
    */
   async setSession(
     session: ConversationSession,
-    options: SessionStorageOptions = {}
+    options: SessionStorageOptions = {},
   ): Promise<boolean> {
     try {
       const key = this.getSessionKey(session.phoneNumber);
@@ -65,19 +65,24 @@ export class ConversationSessionService {
       const success = await this.redisService.set(key, sessionData, ttl);
 
       if (success) {
-        this.logger.debug(`Saved session for phone number: ${session.phoneNumber}`, {
-          state: session.currentState,
-          ttl,
-        });
+        this.logger.debug(
+          `Saved session for phone number: ${session.phoneNumber}`,
+          {
+            state: session.currentState,
+            ttl,
+          },
+        );
       } else {
-        this.logger.warn(`Failed to save session for phone number: ${session.phoneNumber}`);
+        this.logger.warn(
+          `Failed to save session for phone number: ${session.phoneNumber}`,
+        );
       }
 
       return success;
     } catch (error) {
       this.logger.error(
         `Failed to set session for phone number: ${session.phoneNumber}`,
-        { error: error.message }
+        { error: error.message },
       );
       return false;
     }
@@ -89,7 +94,7 @@ export class ConversationSessionService {
   async createSession(
     phoneNumber: string,
     initialState: ConversationState = ConversationState.GREETING,
-    options: SessionStorageOptions = {}
+    options: SessionStorageOptions = {},
   ): Promise<ConversationSession | null> {
     try {
       const session: ConversationSession = {
@@ -100,11 +105,14 @@ export class ConversationSessionService {
       };
 
       const success = await this.setSession(session, options);
-      
+
       if (success) {
-        this.logger.log(`Created new session for phone number: ${phoneNumber}`, {
-          initialState,
-        });
+        this.logger.log(
+          `Created new session for phone number: ${phoneNumber}`,
+          {
+            initialState,
+          },
+        );
         return session;
       }
 
@@ -112,7 +120,7 @@ export class ConversationSessionService {
     } catch (error) {
       this.logger.error(
         `Failed to create session for phone number: ${phoneNumber}`,
-        { error: error.message }
+        { error: error.message },
       );
       return null;
     }
@@ -124,19 +132,21 @@ export class ConversationSessionService {
   async updateState(
     phoneNumber: string,
     newState: ConversationState,
-    context?: Record<string, any>
+    context?: Record<string, any>,
   ): Promise<boolean> {
     try {
       const session = await this.getSession(phoneNumber);
-      
+
       if (!session) {
-        this.logger.warn(`Cannot update state - no session found for phone number: ${phoneNumber}`);
+        this.logger.warn(
+          `Cannot update state - no session found for phone number: ${phoneNumber}`,
+        );
         return false;
       }
 
       const oldState = session.currentState;
       session.currentState = newState;
-      
+
       if (context) {
         session.context = { ...session.context, ...context };
       }
@@ -155,7 +165,7 @@ export class ConversationSessionService {
     } catch (error) {
       this.logger.error(
         `Failed to update state for phone number: ${phoneNumber}`,
-        { error: error.message }
+        { error: error.message },
       );
       return false;
     }
@@ -166,13 +176,15 @@ export class ConversationSessionService {
    */
   async updateContext(
     phoneNumber: string,
-    context: Record<string, any>
+    context: Record<string, any>,
   ): Promise<boolean> {
     try {
       const session = await this.getSession(phoneNumber);
-      
+
       if (!session) {
-        this.logger.warn(`Cannot update context - no session found for phone number: ${phoneNumber}`);
+        this.logger.warn(
+          `Cannot update context - no session found for phone number: ${phoneNumber}`,
+        );
         return false;
       }
 
@@ -189,7 +201,7 @@ export class ConversationSessionService {
     } catch (error) {
       this.logger.error(
         `Failed to update context for phone number: ${phoneNumber}`,
-        { error: error.message }
+        { error: error.message },
       );
       return false;
     }
@@ -206,14 +218,16 @@ export class ConversationSessionService {
       if (success) {
         this.logger.debug(`Deleted session for phone number: ${phoneNumber}`);
       } else {
-        this.logger.warn(`Failed to delete session for phone number: ${phoneNumber}`);
+        this.logger.warn(
+          `Failed to delete session for phone number: ${phoneNumber}`,
+        );
       }
 
       return success;
     } catch (error) {
       this.logger.error(
         `Failed to delete session for phone number: ${phoneNumber}`,
-        { error: error.message }
+        { error: error.message },
       );
       return false;
     }
@@ -229,7 +243,7 @@ export class ConversationSessionService {
     } catch (error) {
       this.logger.error(
         `Failed to check session existence for phone number: ${phoneNumber}`,
-        { error: error.message }
+        { error: error.message },
       );
       return false;
     }
@@ -243,10 +257,9 @@ export class ConversationSessionService {
       const key = this.getSessionKey(phoneNumber);
       return await this.redisService.ttl(key);
     } catch (error) {
-      this.logger.error(
-        `Failed to get TTL for phone number: ${phoneNumber}`,
-        { error: error.message }
-      );
+      this.logger.error(`Failed to get TTL for phone number: ${phoneNumber}`, {
+        error: error.message,
+      });
       return -1;
     }
   }
@@ -256,14 +269,16 @@ export class ConversationSessionService {
    */
   async extendSession(
     phoneNumber: string,
-    additionalSeconds: number = 3600
+    additionalSeconds: number = 3600,
   ): Promise<boolean> {
     try {
       const key = this.getSessionKey(phoneNumber);
       const currentTtl = await this.redisService.ttl(key);
-      
+
       if (currentTtl <= 0) {
-        this.logger.warn(`Cannot extend session - session not found or expired for phone number: ${phoneNumber}`);
+        this.logger.warn(
+          `Cannot extend session - session not found or expired for phone number: ${phoneNumber}`,
+        );
         return false;
       }
 
@@ -281,7 +296,7 @@ export class ConversationSessionService {
     } catch (error) {
       this.logger.error(
         `Failed to extend session for phone number: ${phoneNumber}`,
-        { error: error.message }
+        { error: error.message },
       );
       return false;
     }
@@ -294,16 +309,16 @@ export class ConversationSessionService {
     try {
       const pattern = `${this.keyPrefix}*`;
       const keys = await this.redisService.keys(pattern);
-      
+
       // Extract phone numbers from keys
-      const phoneNumbers = keys.map(key => 
-        key.replace(this.keyPrefix, '')
-      );
+      const phoneNumbers = keys.map((key) => key.replace(this.keyPrefix, ""));
 
       this.logger.debug(`Found ${phoneNumbers.length} active sessions`);
       return phoneNumbers;
     } catch (error) {
-      this.logger.error('Failed to get active sessions', { error: error.message });
+      this.logger.error("Failed to get active sessions", {
+        error: error.message,
+      });
       return [];
     }
   }
@@ -318,7 +333,7 @@ export class ConversationSessionService {
 
       for (const phoneNumber of activePhoneNumbers) {
         const ttl = await this.getSessionTtl(phoneNumber);
-        
+
         // If TTL is 0 or negative, the key is expired or doesn't exist
         if (ttl <= 0) {
           const deleted = await this.deleteSession(phoneNumber);
@@ -334,7 +349,9 @@ export class ConversationSessionService {
 
       return cleanedCount;
     } catch (error) {
-      this.logger.error('Failed to cleanup expired sessions', { error: error.message });
+      this.logger.error("Failed to cleanup expired sessions", {
+        error: error.message,
+      });
       return 0;
     }
   }
@@ -348,10 +365,13 @@ export class ConversationSessionService {
   }> {
     try {
       const activePhoneNumbers = await this.getActiveSessions();
-      const sessionsByState: Record<ConversationState, number> = {} as Record<ConversationState, number>;
+      const sessionsByState: Record<ConversationState, number> = {} as Record<
+        ConversationState,
+        number
+      >;
 
       // Initialize counters
-      Object.values(ConversationState).forEach(state => {
+      Object.values(ConversationState).forEach((state) => {
         sessionsByState[state] = 0;
       });
 
@@ -368,7 +388,9 @@ export class ConversationSessionService {
         sessionsByState,
       };
     } catch (error) {
-      this.logger.error('Failed to get session statistics', { error: error.message });
+      this.logger.error("Failed to get session statistics", {
+        error: error.message,
+      });
       return {
         totalSessions: 0,
         sessionsByState: {} as Record<ConversationState, number>,

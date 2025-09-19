@@ -1,14 +1,20 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { eq, desc, asc, and, gte, lte, isNull, isNotNull } from 'drizzle-orm';
-import { DatabaseService } from '../../database/database.service';
-import { payments, orders } from '../../database/schema';
-import { Payment, NewPayment, UpdatePayment, PaymentStatus, PaymentMethod } from '../../database/types';
+import { Injectable, Logger } from "@nestjs/common";
+import { eq, desc, asc, and, gte, lte, isNull, isNotNull } from "drizzle-orm";
+import { DatabaseService } from "../../database/database.service";
+import { payments, orders } from "../../database/schema";
+import {
+  Payment,
+  NewPayment,
+  UpdatePayment,
+  PaymentStatus,
+  PaymentMethod,
+} from "../../database/types";
 
 export interface PaymentSearchOptions {
   limit?: number;
   offset?: number;
-  sortBy?: 'createdAt' | 'amount' | 'verifiedAt';
-  sortOrder?: 'asc' | 'desc';
+  sortBy?: "createdAt" | "amount" | "verifiedAt";
+  sortOrder?: "asc" | "desc";
   status?: PaymentStatus | PaymentStatus[];
   paymentMethod?: PaymentMethod | PaymentMethod[];
   orderId?: string;
@@ -45,23 +51,27 @@ export class PaymentsRepository {
     amount: number,
     paymentMethod: PaymentMethod,
     paymentReference?: string,
-    externalTransactionId?: string
+    externalTransactionId?: string,
   ): Promise<Payment> {
     try {
       const paymentData = {
         orderId,
         amount: amount.toString(),
         paymentMethod,
-        status: 'pending' as const,
+        status: "pending" as const,
         ...(paymentReference && { paymentReference }),
         ...(externalTransactionId && { externalTransactionId }),
       } as NewPayment;
 
       const payment = await this.create(paymentData);
-      this.logger.log(`Created payment for order ${orderId} with amount ${amount}`);
+      this.logger.log(
+        `Created payment for order ${orderId} with amount ${amount}`,
+      );
       return payment;
     } catch (error) {
-      this.logger.error(`Failed to create payment for order ${orderId}: ${error.message}`);
+      this.logger.error(
+        `Failed to create payment for order ${orderId}: ${error.message}`,
+      );
       throw error;
     }
   }
@@ -81,7 +91,9 @@ export class PaymentsRepository {
     }
   }
 
-  async findByPaymentReference(paymentReference: string): Promise<Payment | null> {
+  async findByPaymentReference(
+    paymentReference: string,
+  ): Promise<Payment | null> {
     try {
       const [payment] = await this.databaseService.db
         .select()
@@ -91,12 +103,16 @@ export class PaymentsRepository {
 
       return payment || null;
     } catch (error) {
-      this.logger.error(`Failed to find payment by reference ${paymentReference}: ${error.message}`);
+      this.logger.error(
+        `Failed to find payment by reference ${paymentReference}: ${error.message}`,
+      );
       throw error;
     }
   }
 
-  async findByExternalTransactionId(externalTransactionId: string): Promise<Payment | null> {
+  async findByExternalTransactionId(
+    externalTransactionId: string,
+  ): Promise<Payment | null> {
     try {
       const [payment] = await this.databaseService.db
         .select()
@@ -106,7 +122,9 @@ export class PaymentsRepository {
 
       return payment || null;
     } catch (error) {
-      this.logger.error(`Failed to find payment by external transaction ID ${externalTransactionId}: ${error.message}`);
+      this.logger.error(
+        `Failed to find payment by external transaction ID ${externalTransactionId}: ${error.message}`,
+      );
       throw error;
     }
   }
@@ -121,31 +139,38 @@ export class PaymentsRepository {
 
       return paymentList;
     } catch (error) {
-      this.logger.error(`Failed to find payments by order ID ${orderId}: ${error.message}`);
+      this.logger.error(
+        `Failed to find payments by order ID ${orderId}: ${error.message}`,
+      );
       throw error;
     }
   }
 
-  async findByStatus(status: PaymentStatus | PaymentStatus[], options: PaymentSearchOptions = {}): Promise<Payment[]> {
+  async findByStatus(
+    status: PaymentStatus | PaymentStatus[],
+    options: PaymentSearchOptions = {},
+  ): Promise<Payment[]> {
     try {
       const {
         limit = 50,
         offset = 0,
-        sortBy = 'createdAt',
-        sortOrder = 'desc',
+        sortBy = "createdAt",
+        sortOrder = "desc",
         paymentMethod,
         orderId,
         dateFrom,
         dateTo,
         minAmount,
-        maxAmount
+        maxAmount,
       } = options;
 
       let whereConditions = [];
 
       // Add status filter
       if (Array.isArray(status)) {
-        whereConditions.push(`status IN (${status.map(s => `'${s}'`).join(',')})`);
+        whereConditions.push(
+          `status IN (${status.map((s) => `'${s}'`).join(",")})`,
+        );
       } else {
         whereConditions.push(eq(payments.status, status));
       }
@@ -153,7 +178,9 @@ export class PaymentsRepository {
       // Add payment method filter
       if (paymentMethod) {
         if (Array.isArray(paymentMethod)) {
-          whereConditions.push(`payment_method IN (${paymentMethod.map(m => `'${m}'`).join(',')})`);
+          whereConditions.push(
+            `payment_method IN (${paymentMethod.map((m) => `'${m}'`).join(",")})`,
+          );
         } else {
           whereConditions.push(eq(payments.paymentMethod, paymentMethod));
         }
@@ -181,12 +208,13 @@ export class PaymentsRepository {
       }
 
       const sortColumn = payments[sortBy];
-      const orderByClause = sortOrder === 'asc' ? asc(sortColumn) : desc(sortColumn);
+      const orderByClause =
+        sortOrder === "asc" ? asc(sortColumn) : desc(sortColumn);
 
       const paymentList = await this.databaseService.db
         .select()
         .from(payments)
-        .where(and(...whereConditions.filter(c => typeof c !== 'string'))) // Filter out string conditions for now
+        .where(and(...whereConditions.filter((c) => typeof c !== "string"))) // Filter out string conditions for now
         .orderBy(orderByClause)
         .limit(limit)
         .offset(offset);
@@ -202,12 +230,12 @@ export class PaymentsRepository {
     id: string,
     status: PaymentStatus,
     failureReason?: string,
-    externalTransactionId?: string
+    externalTransactionId?: string,
   ): Promise<Payment> {
     try {
       const updateData: any = { status };
 
-      if (status === 'verified') {
+      if (status === "verified") {
         updateData.verifiedAt = new Date();
       }
 
@@ -232,18 +260,20 @@ export class PaymentsRepository {
       this.logger.log(`Updated payment ${id} status to ${status}`);
       return payment;
     } catch (error) {
-      this.logger.error(`Failed to update payment status ${id}: ${error.message}`);
+      this.logger.error(
+        `Failed to update payment status ${id}: ${error.message}`,
+      );
       throw error;
     }
   }
 
   async verifyPayment(
     id: string,
-    externalTransactionId?: string
+    externalTransactionId?: string,
   ): Promise<Payment> {
     try {
       const updateData: any = {
-        status: 'verified' as PaymentStatus,
+        status: "verified" as PaymentStatus,
         verifiedAt: new Date(),
       };
 
@@ -274,7 +304,7 @@ export class PaymentsRepository {
       const [payment] = await this.databaseService.db
         .update(payments)
         .set({
-          status: 'failed' as PaymentStatus,
+          status: "failed" as PaymentStatus,
           failureReason,
         } as UpdatePayment)
         .where(eq(payments.id, id))
@@ -287,7 +317,9 @@ export class PaymentsRepository {
       this.logger.log(`Marked payment ${id} as failed: ${failureReason}`);
       return payment;
     } catch (error) {
-      this.logger.error(`Failed to mark payment as failed ${id}: ${error.message}`);
+      this.logger.error(
+        `Failed to mark payment as failed ${id}: ${error.message}`,
+      );
       throw error;
     }
   }
@@ -295,7 +327,7 @@ export class PaymentsRepository {
   async refundPayment(id: string, refundReason?: string): Promise<Payment> {
     try {
       const updateData: any = {
-        status: 'refunded' as PaymentStatus,
+        status: "refunded" as PaymentStatus,
       };
 
       if (refundReason) {
@@ -366,8 +398,8 @@ export class PaymentsRepository {
       const {
         limit = 50,
         offset = 0,
-        sortBy = 'createdAt',
-        sortOrder = 'desc',
+        sortBy = "createdAt",
+        sortOrder = "desc",
         status,
         paymentMethod,
         orderId,
@@ -375,7 +407,7 @@ export class PaymentsRepository {
         dateTo,
         minAmount,
         maxAmount,
-        verifiedOnly = false
+        verifiedOnly = false,
       } = options;
 
       let whereConditions = [];
@@ -427,15 +459,16 @@ export class PaymentsRepository {
       }
 
       const sortColumn = payments[sortBy];
-      const orderByClause = sortOrder === 'asc' ? asc(sortColumn) : desc(sortColumn);
+      const orderByClause =
+        sortOrder === "asc" ? asc(sortColumn) : desc(sortColumn);
 
-      const baseQuery = this.databaseService.db
-        .select()
-        .from(payments);
+      const baseQuery = this.databaseService.db.select().from(payments);
 
-      const paymentList = await (whereConditions.length > 0 
-        ? baseQuery.where(and(...whereConditions))
-        : baseQuery)
+      const paymentList = await (
+        whereConditions.length > 0
+          ? baseQuery.where(and(...whereConditions))
+          : baseQuery
+      )
         .orderBy(orderByClause)
         .limit(limit)
         .offset(offset);
@@ -457,7 +490,7 @@ export class PaymentsRepository {
         dateTo,
         minAmount,
         maxAmount,
-        verifiedOnly = false
+        verifiedOnly = false,
       } = options;
 
       let whereConditions = [];
@@ -506,11 +539,9 @@ export class PaymentsRepository {
         whereConditions.push(lte(payments.amount, maxAmount.toString()));
       }
 
-      const baseQuery = this.databaseService.db
-        .select()
-        .from(payments);
+      const baseQuery = this.databaseService.db.select().from(payments);
 
-      const result = await (whereConditions.length > 0 
+      const result = await (whereConditions.length > 0
         ? baseQuery.where(and(...whereConditions))
         : baseQuery);
       return result.length;
@@ -525,7 +556,9 @@ export class PaymentsRepository {
       const payment = await this.findById(id);
       return payment !== null;
     } catch (error) {
-      this.logger.error(`Failed to check if payment exists ${id}: ${error.message}`);
+      this.logger.error(
+        `Failed to check if payment exists ${id}: ${error.message}`,
+      );
       throw error;
     }
   }
@@ -535,7 +568,9 @@ export class PaymentsRepository {
       const payment = await this.findByPaymentReference(paymentReference);
       return payment !== null;
     } catch (error) {
-      this.logger.error(`Failed to check if payment reference exists ${paymentReference}: ${error.message}`);
+      this.logger.error(
+        `Failed to check if payment reference exists ${paymentReference}: ${error.message}`,
+      );
       throw error;
     }
   }
@@ -543,9 +578,11 @@ export class PaymentsRepository {
   async isPaymentVerified(id: string): Promise<boolean> {
     try {
       const payment = await this.findById(id);
-      return payment ? payment.status === 'verified' : false;
+      return payment ? payment.status === "verified" : false;
     } catch (error) {
-      this.logger.error(`Failed to check if payment is verified ${id}: ${error.message}`);
+      this.logger.error(
+        `Failed to check if payment is verified ${id}: ${error.message}`,
+      );
       throw error;
     }
   }
@@ -553,11 +590,16 @@ export class PaymentsRepository {
   async getOrderPaymentTotal(orderId: string): Promise<number> {
     try {
       const payments = await this.findByOrderId(orderId);
-      const verifiedPayments = payments.filter(p => p.status === 'verified');
-      const total = verifiedPayments.reduce((sum, payment) => sum + parseFloat(payment.amount), 0);
+      const verifiedPayments = payments.filter((p) => p.status === "verified");
+      const total = verifiedPayments.reduce(
+        (sum, payment) => sum + parseFloat(payment.amount),
+        0,
+      );
       return Math.round(total * 100) / 100; // Round to 2 decimal places
     } catch (error) {
-      this.logger.error(`Failed to calculate payment total for order ${orderId}: ${error.message}`);
+      this.logger.error(
+        `Failed to calculate payment total for order ${orderId}: ${error.message}`,
+      );
       throw error;
     }
   }
@@ -565,34 +607,42 @@ export class PaymentsRepository {
   async hasVerifiedPayment(orderId: string): Promise<boolean> {
     try {
       const payments = await this.findByOrderId(orderId);
-      return payments.some(p => p.status === 'verified');
+      return payments.some((p) => p.status === "verified");
     } catch (error) {
-      this.logger.error(`Failed to check if order has verified payment ${orderId}: ${error.message}`);
+      this.logger.error(
+        `Failed to check if order has verified payment ${orderId}: ${error.message}`,
+      );
       throw error;
     }
   }
 
-  async getPendingPayments(options: PaymentSearchOptions = {}): Promise<Payment[]> {
+  async getPendingPayments(
+    options: PaymentSearchOptions = {},
+  ): Promise<Payment[]> {
     try {
-      return await this.findByStatus('pending', options);
+      return await this.findByStatus("pending", options);
     } catch (error) {
       this.logger.error(`Failed to get pending payments: ${error.message}`);
       throw error;
     }
   }
 
-  async getVerifiedPayments(options: PaymentSearchOptions = {}): Promise<Payment[]> {
+  async getVerifiedPayments(
+    options: PaymentSearchOptions = {},
+  ): Promise<Payment[]> {
     try {
-      return await this.findByStatus('verified', options);
+      return await this.findByStatus("verified", options);
     } catch (error) {
       this.logger.error(`Failed to get verified payments: ${error.message}`);
       throw error;
     }
   }
 
-  async getFailedPayments(options: PaymentSearchOptions = {}): Promise<Payment[]> {
+  async getFailedPayments(
+    options: PaymentSearchOptions = {},
+  ): Promise<Payment[]> {
     try {
-      return await this.findByStatus('failed', options);
+      return await this.findByStatus("failed", options);
     } catch (error) {
       this.logger.error(`Failed to get failed payments: ${error.message}`);
       throw error;

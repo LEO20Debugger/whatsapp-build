@@ -1,8 +1,12 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { eq, and } from 'drizzle-orm';
-import { DatabaseService } from '../../database/database.service';
-import { orderItems, products } from '../../database/schema';
-import { OrderItem, NewOrderItem, OrderItemWithProduct } from '../../database/types';
+import { Injectable, Logger } from "@nestjs/common";
+import { eq, and } from "drizzle-orm";
+import { DatabaseService } from "../../database/database.service";
+import { orderItems, products } from "../../database/schema";
+import {
+  OrderItem,
+  NewOrderItem,
+  OrderItemWithProduct,
+} from "../../database/types";
 
 @Injectable()
 export class OrderItemsRepository {
@@ -28,7 +32,7 @@ export class OrderItemsRepository {
   async createFromProduct(
     orderId: string,
     productId: string,
-    quantity: number
+    quantity: number,
   ): Promise<OrderItem> {
     try {
       // Get product details
@@ -47,7 +51,9 @@ export class OrderItemsRepository {
       }
 
       if (product.stockQuantity < quantity) {
-        throw new Error(`Insufficient stock for product ${product.name}. Available: ${product.stockQuantity}, Requested: ${quantity}`);
+        throw new Error(
+          `Insufficient stock for product ${product.name}. Available: ${product.stockQuantity}, Requested: ${quantity}`,
+        );
       }
 
       const unitPrice = parseFloat(product.price);
@@ -63,10 +69,14 @@ export class OrderItemsRepository {
       };
 
       const orderItem = await this.create(orderItemData);
-      this.logger.log(`Created order item for product ${product.name} with quantity ${quantity}`);
+      this.logger.log(
+        `Created order item for product ${product.name} with quantity ${quantity}`,
+      );
       return orderItem;
     } catch (error) {
-      this.logger.error(`Failed to create order item from product ${productId}: ${error.message}`);
+      this.logger.error(
+        `Failed to create order item from product ${productId}: ${error.message}`,
+      );
       throw error;
     }
   }
@@ -81,7 +91,9 @@ export class OrderItemsRepository {
 
       return orderItem || null;
     } catch (error) {
-      this.logger.error(`Failed to find order item by ID ${id}: ${error.message}`);
+      this.logger.error(
+        `Failed to find order item by ID ${id}: ${error.message}`,
+      );
       throw error;
     }
   }
@@ -95,12 +107,16 @@ export class OrderItemsRepository {
 
       return items;
     } catch (error) {
-      this.logger.error(`Failed to find order items by order ID ${orderId}: ${error.message}`);
+      this.logger.error(
+        `Failed to find order items by order ID ${orderId}: ${error.message}`,
+      );
       throw error;
     }
   }
 
-  async findByOrderIdWithProducts(orderId: string): Promise<OrderItemWithProduct[]> {
+  async findByOrderIdWithProducts(
+    orderId: string,
+  ): Promise<OrderItemWithProduct[]> {
     try {
       const items = await this.databaseService.db
         .select({
@@ -122,13 +138,13 @@ export class OrderItemsRepository {
             sku: products.sku,
             createdAt: products.createdAt,
             updatedAt: products.updatedAt,
-          }
+          },
         })
         .from(orderItems)
         .leftJoin(products, eq(orderItems.productId, products.id))
         .where(eq(orderItems.orderId, orderId));
 
-      return items.map(item => ({
+      return items.map((item) => ({
         id: item.id,
         orderId: item.orderId,
         productId: item.productId,
@@ -139,7 +155,9 @@ export class OrderItemsRepository {
         product: item.product,
       })) as OrderItemWithProduct[];
     } catch (error) {
-      this.logger.error(`Failed to find order items with products by order ID ${orderId}: ${error.message}`);
+      this.logger.error(
+        `Failed to find order items with products by order ID ${orderId}: ${error.message}`,
+      );
       throw error;
     }
   }
@@ -153,7 +171,9 @@ export class OrderItemsRepository {
 
       return items;
     } catch (error) {
-      this.logger.error(`Failed to find order items by product ID ${productId}: ${error.message}`);
+      this.logger.error(
+        `Failed to find order items by product ID ${productId}: ${error.message}`,
+      );
       throw error;
     }
   }
@@ -185,22 +205,32 @@ export class OrderItemsRepository {
       this.logger.log(`Updated quantity for order item ${id} to ${quantity}`);
       return orderItem;
     } catch (error) {
-      this.logger.error(`Failed to update quantity for order item ${id}: ${error.message}`);
+      this.logger.error(
+        `Failed to update quantity for order item ${id}: ${error.message}`,
+      );
       throw error;
     }
   }
 
-  async update(id: string, updateData: Partial<NewOrderItem>): Promise<OrderItem> {
+  async update(
+    id: string,
+    updateData: Partial<NewOrderItem>,
+  ): Promise<OrderItem> {
     try {
       // If quantity or unitPrice is being updated, recalculate totalPrice
-      if (updateData.quantity !== undefined || updateData.unitPrice !== undefined) {
+      if (
+        updateData.quantity !== undefined ||
+        updateData.unitPrice !== undefined
+      ) {
         const currentItem = await this.findById(id);
         if (!currentItem) {
           throw new Error(`Order item with ID ${id} not found`);
         }
 
         const quantity = updateData.quantity ?? currentItem.quantity;
-        const unitPrice = updateData.unitPrice ? parseFloat(updateData.unitPrice) : parseFloat(currentItem.unitPrice);
+        const unitPrice = updateData.unitPrice
+          ? parseFloat(updateData.unitPrice)
+          : parseFloat(currentItem.unitPrice);
         const totalPrice = unitPrice * quantity;
 
         updateData.totalPrice = totalPrice.toString();
@@ -253,10 +283,14 @@ export class OrderItemsRepository {
 
       // For postgres-js, result is an array with count property
       const deletedCount = (result as any).count || 0;
-      this.logger.log(`Deleted ${deletedCount} order items for order ${orderId}`);
+      this.logger.log(
+        `Deleted ${deletedCount} order items for order ${orderId}`,
+      );
       return deletedCount;
     } catch (error) {
-      this.logger.error(`Failed to delete order items for order ${orderId}: ${error.message}`);
+      this.logger.error(
+        `Failed to delete order items for order ${orderId}: ${error.message}`,
+      );
       throw error;
     }
   }
@@ -266,7 +300,9 @@ export class OrderItemsRepository {
       const orderItem = await this.findById(id);
       return orderItem !== null;
     } catch (error) {
-      this.logger.error(`Failed to check if order item exists ${id}: ${error.message}`);
+      this.logger.error(
+        `Failed to check if order item exists ${id}: ${error.message}`,
+      );
       throw error;
     }
   }
@@ -274,10 +310,15 @@ export class OrderItemsRepository {
   async getOrderTotal(orderId: string): Promise<number> {
     try {
       const items = await this.findByOrderId(orderId);
-      const total = items.reduce((sum, item) => sum + parseFloat(item.totalPrice), 0);
+      const total = items.reduce(
+        (sum, item) => sum + parseFloat(item.totalPrice),
+        0,
+      );
       return Math.round(total * 100) / 100; // Round to 2 decimal places
     } catch (error) {
-      this.logger.error(`Failed to calculate order total for order ${orderId}: ${error.message}`);
+      this.logger.error(
+        `Failed to calculate order total for order ${orderId}: ${error.message}`,
+      );
       throw error;
     }
   }
@@ -287,12 +328,18 @@ export class OrderItemsRepository {
       const items = await this.findByOrderId(orderId);
       return items.reduce((sum, item) => sum + item.quantity, 0);
     } catch (error) {
-      this.logger.error(`Failed to get item count for order ${orderId}: ${error.message}`);
+      this.logger.error(
+        `Failed to get item count for order ${orderId}: ${error.message}`,
+      );
       throw error;
     }
   }
 
-  async validateOrderItem(orderId: string, productId: string, quantity: number): Promise<{
+  async validateOrderItem(
+    orderId: string,
+    productId: string,
+    quantity: number,
+  ): Promise<{
     isValid: boolean;
     errors: string[];
   }> {
@@ -316,11 +363,13 @@ export class OrderItemsRepository {
       }
 
       if (quantity <= 0) {
-        errors.push('Quantity must be greater than 0');
+        errors.push("Quantity must be greater than 0");
       }
 
       if (product.stockQuantity < quantity) {
-        errors.push(`Insufficient stock for product ${product.name}. Available: ${product.stockQuantity}, Requested: ${quantity}`);
+        errors.push(
+          `Insufficient stock for product ${product.name}. Available: ${product.stockQuantity}, Requested: ${quantity}`,
+        );
       }
 
       return {
@@ -336,28 +385,43 @@ export class OrderItemsRepository {
     }
   }
 
-  async addMultipleItems(orderId: string, items: Array<{ productId: string; quantity: number }>): Promise<OrderItem[]> {
+  async addMultipleItems(
+    orderId: string,
+    items: Array<{ productId: string; quantity: number }>,
+  ): Promise<OrderItem[]> {
     try {
       const createdItems: OrderItem[] = [];
 
       // Validate all items first
       for (const item of items) {
-        const validation = await this.validateOrderItem(orderId, item.productId, item.quantity);
+        const validation = await this.validateOrderItem(
+          orderId,
+          item.productId,
+          item.quantity,
+        );
         if (!validation.isValid) {
-          throw new Error(`Validation failed for product ${item.productId}: ${validation.errors.join(', ')}`);
+          throw new Error(
+            `Validation failed for product ${item.productId}: ${validation.errors.join(", ")}`,
+          );
         }
       }
 
       // Create all items
       for (const item of items) {
-        const orderItem = await this.createFromProduct(orderId, item.productId, item.quantity);
+        const orderItem = await this.createFromProduct(
+          orderId,
+          item.productId,
+          item.quantity,
+        );
         createdItems.push(orderItem);
       }
 
       this.logger.log(`Added ${createdItems.length} items to order ${orderId}`);
       return createdItems;
     } catch (error) {
-      this.logger.error(`Failed to add multiple items to order ${orderId}: ${error.message}`);
+      this.logger.error(
+        `Failed to add multiple items to order ${orderId}: ${error.message}`,
+      );
       throw error;
     }
   }

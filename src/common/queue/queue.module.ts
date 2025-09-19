@@ -1,12 +1,12 @@
-import { Module } from '@nestjs/common';
-import { BullModule } from '@nestjs/bull';
-import { ConfigService } from '@nestjs/config';
-import { QueueService } from './services/queue.service';
-import { MessageRetryProcessor } from './processors/message-retry.processor';
-import { PaymentVerificationProcessor } from './processors/payment-verification.processor';
-import { ReceiptGenerationProcessor } from './processors/receipt-generation.processor';
-import { QueueHealthService } from './services/queue-health.service';
-import { QUEUE_NAMES } from './constants/queue-names.constants';
+import { Module } from "@nestjs/common";
+import { BullModule } from "@nestjs/bull";
+import { ConfigService } from "@nestjs/config";
+import { QueueService } from "./services/queue.service";
+import { MessageRetryProcessor } from "./processors/message-retry.processor";
+import { PaymentVerificationProcessor } from "./processors/payment-verification.processor";
+import { ReceiptGenerationProcessor } from "./processors/receipt-generation.processor";
+import { QueueHealthService } from "./services/queue-health.service";
+import { QUEUE_NAMES } from "./constants/queue-names.constants";
 
 @Module({
   imports: [
@@ -17,7 +17,7 @@ import { QUEUE_NAMES } from './constants/queue-names.constants';
           defaultJobOptions: {
             attempts: 3,
             backoff: {
-              type: 'exponential',
+              type: "exponential",
               delay: 2000,
             },
             removeOnComplete: 10,
@@ -32,7 +32,7 @@ import { QUEUE_NAMES } from './constants/queue-names.constants';
           defaultJobOptions: {
             attempts: 5,
             backoff: {
-              type: 'exponential',
+              type: "exponential",
               delay: 5000,
             },
             removeOnComplete: 20,
@@ -47,7 +47,7 @@ import { QUEUE_NAMES } from './constants/queue-names.constants';
           defaultJobOptions: {
             attempts: 3,
             backoff: {
-              type: 'exponential',
+              type: "exponential",
               delay: 1000,
             },
             removeOnComplete: 50,

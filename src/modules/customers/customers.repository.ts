@@ -1,14 +1,14 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { eq, like, desc, asc } from 'drizzle-orm';
-import { DatabaseService } from '../../database/database.service';
-import { customers } from '../../database/schema';
-import { Customer, NewCustomer, UpdateCustomer } from '../../database/types';
+import { Injectable, Logger } from "@nestjs/common";
+import { eq, like, desc, asc } from "drizzle-orm";
+import { DatabaseService } from "../../database/database.service";
+import { customers } from "../../database/schema";
+import { Customer, NewCustomer, UpdateCustomer } from "../../database/types";
 
 export interface CustomerSearchOptions {
   limit?: number;
   offset?: number;
-  sortBy?: 'name' | 'phoneNumber' | 'createdAt';
-  sortOrder?: 'asc' | 'desc';
+  sortBy?: "name" | "phoneNumber" | "createdAt";
+  sortOrder?: "asc" | "desc";
 }
 
 @Injectable()
@@ -19,9 +19,8 @@ export class CustomersRepository {
 
   /** Create New Customer */
   async create(customerData: NewCustomer): Promise<Customer> {
-
     /** set table alias */
-    const c = customers
+    const c = customers;
 
     /** build and run query */
     try {
@@ -38,13 +37,12 @@ export class CustomersRepository {
     }
   }
 
-   /** Find One Customer By  Id */
+  /** Find One Customer By  Id */
   async findById(id: string): Promise<Customer | null> {
+    /** set table alias */
+    const c = customers;
 
-      /** set table alias */
-    const c = customers
-
-     /** build and run query */
+    /** build and run query */
     try {
       const [customer] = await this.databaseService.db
         .select()
@@ -54,18 +52,19 @@ export class CustomersRepository {
 
       return customer || null;
     } catch (error) {
-      this.logger.error(`Failed to find customer by ID ${id}: ${error.message}`);
+      this.logger.error(
+        `Failed to find customer by ID ${id}: ${error.message}`,
+      );
       throw error;
     }
   }
 
-    /** Find One Customer By Phone Number */
+  /** Find One Customer By Phone Number */
   async findByPhoneNumber(phoneNumber: string): Promise<Customer | null> {
+    /** set table alias */
+    const c = customers;
 
-     /** set table alias */
-    const c = customers
-
-     /** build and run query */
+    /** build and run query */
     try {
       const [customer] = await this.databaseService.db
         .select()
@@ -75,16 +74,21 @@ export class CustomersRepository {
 
       return customer || null;
     } catch (error) {
-      this.logger.error(`Failed to find customer by phone number ${phoneNumber}: ${error.message}`);
+      this.logger.error(
+        `Failed to find customer by phone number ${phoneNumber}: ${error.message}`,
+      );
       throw error;
     }
   }
 
-  async findOrCreateByPhoneNumber(phoneNumber: string, name?: string): Promise<Customer> {
+  async findOrCreateByPhoneNumber(
+    phoneNumber: string,
+    name?: string,
+  ): Promise<Customer> {
     try {
       // First try to find existing customer
       let customer = await this.findByPhoneNumber(phoneNumber);
-      
+
       if (!customer) {
         // Create new customer if not found
         const newCustomerData: NewCustomer = {
@@ -92,16 +96,22 @@ export class CustomersRepository {
           ...(name && { name }),
         };
         customer = await this.create(newCustomerData);
-        this.logger.log(`Created new customer for phone number: ${phoneNumber}`);
+        this.logger.log(
+          `Created new customer for phone number: ${phoneNumber}`,
+        );
       } else if (name && !customer.name) {
         // Update name if customer exists but doesn't have a name
         customer = await this.update(customer.id, { name });
-        this.logger.log(`Updated customer name for phone number: ${phoneNumber}`);
+        this.logger.log(
+          `Updated customer name for phone number: ${phoneNumber}`,
+        );
       }
 
       return customer;
     } catch (error) {
-      this.logger.error(`Failed to find or create customer for phone number ${phoneNumber}: ${error.message}`);
+      this.logger.error(
+        `Failed to find or create customer for phone number ${phoneNumber}: ${error.message}`,
+      );
       throw error;
     }
   }
@@ -152,12 +162,13 @@ export class CustomersRepository {
       const {
         limit = 50,
         offset = 0,
-        sortBy = 'createdAt',
-        sortOrder = 'desc'
+        sortBy = "createdAt",
+        sortOrder = "desc",
       } = options;
 
       const sortColumn = customers[sortBy];
-      const orderByClause = sortOrder === 'asc' ? asc(sortColumn) : desc(sortColumn);
+      const orderByClause =
+        sortOrder === "asc" ? asc(sortColumn) : desc(sortColumn);
 
       const customerList = await this.databaseService.db
         .select()
@@ -173,17 +184,21 @@ export class CustomersRepository {
     }
   }
 
-  async searchByName(searchTerm: string, options: CustomerSearchOptions = {}): Promise<Customer[]> {
+  async searchByName(
+    searchTerm: string,
+    options: CustomerSearchOptions = {},
+  ): Promise<Customer[]> {
     try {
       const {
         limit = 50,
         offset = 0,
-        sortBy = 'name',
-        sortOrder = 'asc'
+        sortBy = "name",
+        sortOrder = "asc",
       } = options;
 
       const sortColumn = customers[sortBy];
-      const orderByClause = sortOrder === 'asc' ? asc(sortColumn) : desc(sortColumn);
+      const orderByClause =
+        sortOrder === "asc" ? asc(sortColumn) : desc(sortColumn);
 
       const customerList = await this.databaseService.db
         .select()
@@ -195,16 +210,16 @@ export class CustomersRepository {
 
       return customerList;
     } catch (error) {
-      this.logger.error(`Failed to search customers by name "${searchTerm}": ${error.message}`);
+      this.logger.error(
+        `Failed to search customers by name "${searchTerm}": ${error.message}`,
+      );
       throw error;
     }
   }
 
   async count(): Promise<number> {
     try {
-      const result = await this.databaseService.db
-        .select()
-        .from(customers);
+      const result = await this.databaseService.db.select().from(customers);
 
       return result.length;
     } catch (error) {
@@ -218,7 +233,9 @@ export class CustomersRepository {
       const customer = await this.findById(id);
       return customer !== null;
     } catch (error) {
-      this.logger.error(`Failed to check if customer exists ${id}: ${error.message}`);
+      this.logger.error(
+        `Failed to check if customer exists ${id}: ${error.message}`,
+      );
       throw error;
     }
   }
@@ -228,7 +245,9 @@ export class CustomersRepository {
       const customer = await this.findByPhoneNumber(phoneNumber);
       return customer !== null;
     } catch (error) {
-      this.logger.error(`Failed to check if phone number exists ${phoneNumber}: ${error.message}`);
+      this.logger.error(
+        `Failed to check if phone number exists ${phoneNumber}: ${error.message}`,
+      );
       throw error;
     }
   }

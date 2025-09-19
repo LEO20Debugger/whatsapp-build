@@ -1,14 +1,14 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { eq, like, desc, asc, and, gte, lte, ilike } from 'drizzle-orm';
-import { DatabaseService } from '../../database/database.service';
-import { products } from '../../database/schema';
-import { Product, NewProduct, UpdateProduct } from '../../database/types';
+import { Injectable, Logger } from "@nestjs/common";
+import { eq, like, desc, asc, and, gte, lte, ilike } from "drizzle-orm";
+import { DatabaseService } from "../../database/database.service";
+import { products } from "../../database/schema";
+import { Product, NewProduct, UpdateProduct } from "../../database/types";
 
 export interface ProductSearchOptions {
   limit?: number;
   offset?: number;
-  sortBy?: 'name' | 'price' | 'createdAt' | 'stockQuantity';
-  sortOrder?: 'asc' | 'desc';
+  sortBy?: "name" | "price" | "createdAt" | "stockQuantity";
+  sortOrder?: "asc" | "desc";
   category?: string;
   availableOnly?: boolean;
   minPrice?: number;
@@ -62,22 +62,26 @@ export class ProductsRepository {
 
       return product || null;
     } catch (error) {
-      this.logger.error(`Failed to find product by SKU ${sku}: ${error.message}`);
+      this.logger.error(
+        `Failed to find product by SKU ${sku}: ${error.message}`,
+      );
       throw error;
     }
   }
 
-  async findAvailableProducts(options: ProductSearchOptions = {}): Promise<Product[]> {
+  async findAvailableProducts(
+    options: ProductSearchOptions = {},
+  ): Promise<Product[]> {
     try {
       const {
         limit = 50,
         offset = 0,
-        sortBy = 'name',
-        sortOrder = 'asc',
+        sortBy = "name",
+        sortOrder = "asc",
         category,
         minPrice,
         maxPrice,
-        inStock = false
+        inStock = false,
       } = options;
 
       let whereConditions = [eq(products.available, true)];
@@ -101,7 +105,8 @@ export class ProductsRepository {
       }
 
       const sortColumn = products[sortBy];
-      const orderByClause = sortOrder === 'asc' ? asc(sortColumn) : desc(sortColumn);
+      const orderByClause =
+        sortOrder === "asc" ? asc(sortColumn) : desc(sortColumn);
 
       const productList = await this.databaseService.db
         .select()
@@ -118,23 +123,26 @@ export class ProductsRepository {
     }
   }
 
-  async searchProducts(searchTerm: string, options: ProductSearchOptions = {}): Promise<Product[]> {
+  async searchProducts(
+    searchTerm: string,
+    options: ProductSearchOptions = {},
+  ): Promise<Product[]> {
     try {
       const {
         limit = 50,
         offset = 0,
-        sortBy = 'name',
-        sortOrder = 'asc',
+        sortBy = "name",
+        sortOrder = "asc",
         availableOnly = true,
         category,
         minPrice,
         maxPrice,
-        inStock = false
+        inStock = false,
       } = options;
 
       let whereConditions = [
         // Search in name and description
-        like(products.name, `%${searchTerm}%`)
+        like(products.name, `%${searchTerm}%`),
       ];
 
       // Add availability filter
@@ -161,7 +169,8 @@ export class ProductsRepository {
       }
 
       const sortColumn = products[sortBy];
-      const orderByClause = sortOrder === 'asc' ? asc(sortColumn) : desc(sortColumn);
+      const orderByClause =
+        sortOrder === "asc" ? asc(sortColumn) : desc(sortColumn);
 
       const productList = await this.databaseService.db
         .select()
@@ -173,20 +182,25 @@ export class ProductsRepository {
 
       return productList;
     } catch (error) {
-      this.logger.error(`Failed to search products with term "${searchTerm}": ${error.message}`);
+      this.logger.error(
+        `Failed to search products with term "${searchTerm}": ${error.message}`,
+      );
       throw error;
     }
   }
 
-  async findByCategory(category: string, options: ProductSearchOptions = {}): Promise<Product[]> {
+  async findByCategory(
+    category: string,
+    options: ProductSearchOptions = {},
+  ): Promise<Product[]> {
     try {
       const {
         limit = 50,
         offset = 0,
-        sortBy = 'name',
-        sortOrder = 'asc',
+        sortBy = "name",
+        sortOrder = "asc",
         availableOnly = true,
-        inStock = false
+        inStock = false,
       } = options;
 
       let whereConditions = [eq(products.category, category)];
@@ -202,7 +216,8 @@ export class ProductsRepository {
       }
 
       const sortColumn = products[sortBy];
-      const orderByClause = sortOrder === 'asc' ? asc(sortColumn) : desc(sortColumn);
+      const orderByClause =
+        sortOrder === "asc" ? asc(sortColumn) : desc(sortColumn);
 
       const productList = await this.databaseService.db
         .select()
@@ -214,7 +229,9 @@ export class ProductsRepository {
 
       return productList;
     } catch (error) {
-      this.logger.error(`Failed to find products by category "${category}": ${error.message}`);
+      this.logger.error(
+        `Failed to find products by category "${category}": ${error.message}`,
+      );
       throw error;
     }
   }
@@ -254,7 +271,9 @@ export class ProductsRepository {
       this.logger.log(`Updated stock for product ${id} to ${quantity}`);
       return product;
     } catch (error) {
-      this.logger.error(`Failed to update stock for product ${id}: ${error.message}`);
+      this.logger.error(
+        `Failed to update stock for product ${id}: ${error.message}`,
+      );
       throw error;
     }
   }
@@ -269,7 +288,9 @@ export class ProductsRepository {
 
       const newQuantity = currentProduct.stockQuantity - quantity;
       if (newQuantity < 0) {
-        throw new Error(`Insufficient stock. Available: ${currentProduct.stockQuantity}, Requested: ${quantity}`);
+        throw new Error(
+          `Insufficient stock. Available: ${currentProduct.stockQuantity}, Requested: ${quantity}`,
+        );
       }
 
       const [product] = await this.databaseService.db
@@ -278,10 +299,14 @@ export class ProductsRepository {
         .where(eq(products.id, id))
         .returning();
 
-      this.logger.log(`Decremented stock for product ${id} by ${quantity}. New stock: ${newQuantity}`);
+      this.logger.log(
+        `Decremented stock for product ${id} by ${quantity}. New stock: ${newQuantity}`,
+      );
       return product;
     } catch (error) {
-      this.logger.error(`Failed to decrement stock for product ${id}: ${error.message}`);
+      this.logger.error(
+        `Failed to decrement stock for product ${id}: ${error.message}`,
+      );
       throw error;
     }
   }
@@ -301,10 +326,14 @@ export class ProductsRepository {
         .where(eq(products.id, id))
         .returning();
 
-      this.logger.log(`Incremented stock for product ${id} by ${quantity}. New stock: ${newQuantity}`);
+      this.logger.log(
+        `Incremented stock for product ${id} by ${quantity}. New stock: ${newQuantity}`,
+      );
       return product;
     } catch (error) {
-      this.logger.error(`Failed to increment stock for product ${id}: ${error.message}`);
+      this.logger.error(
+        `Failed to increment stock for product ${id}: ${error.message}`,
+      );
       throw error;
     }
   }
@@ -324,7 +353,9 @@ export class ProductsRepository {
       this.logger.log(`Set availability for product ${id} to ${available}`);
       return product;
     } catch (error) {
-      this.logger.error(`Failed to set availability for product ${id}: ${error.message}`);
+      this.logger.error(
+        `Failed to set availability for product ${id}: ${error.message}`,
+      );
       throw error;
     }
   }
@@ -355,13 +386,13 @@ export class ProductsRepository {
       const {
         limit = 50,
         offset = 0,
-        sortBy = 'name',
-        sortOrder = 'asc',
+        sortBy = "name",
+        sortOrder = "asc",
         availableOnly = false,
         category,
         minPrice,
         maxPrice,
-        inStock = false
+        inStock = false,
       } = options;
 
       let whereConditions = [];
@@ -390,15 +421,16 @@ export class ProductsRepository {
       }
 
       const sortColumn = products[sortBy];
-      const orderByClause = sortOrder === 'asc' ? asc(sortColumn) : desc(sortColumn);
+      const orderByClause =
+        sortOrder === "asc" ? asc(sortColumn) : desc(sortColumn);
 
-      const baseQuery = this.databaseService.db
-        .select()
-        .from(products);
+      const baseQuery = this.databaseService.db.select().from(products);
 
-      const productList = await (whereConditions.length > 0 
-        ? baseQuery.where(and(...whereConditions))
-        : baseQuery)
+      const productList = await (
+        whereConditions.length > 0
+          ? baseQuery.where(and(...whereConditions))
+          : baseQuery
+      )
         .orderBy(orderByClause)
         .limit(limit)
         .offset(offset);
@@ -418,7 +450,9 @@ export class ProductsRepository {
         .where(eq(products.available, true));
 
       // Extract unique categories and filter out nulls
-      const categories = [...new Set(result.map(r => r.category).filter(Boolean))];
+      const categories = [
+        ...new Set(result.map((r) => r.category).filter(Boolean)),
+      ];
       return categories;
     } catch (error) {
       this.logger.error(`Failed to get categories: ${error.message}`);
@@ -433,7 +467,7 @@ export class ProductsRepository {
         category,
         minPrice,
         maxPrice,
-        inStock = false
+        inStock = false,
       } = options;
 
       let whereConditions = [];
@@ -461,11 +495,9 @@ export class ProductsRepository {
         whereConditions.push(gte(products.stockQuantity, 1));
       }
 
-      const baseQuery = this.databaseService.db
-        .select()
-        .from(products);
+      const baseQuery = this.databaseService.db.select().from(products);
 
-      const result = await (whereConditions.length > 0 
+      const result = await (whereConditions.length > 0
         ? baseQuery.where(and(...whereConditions))
         : baseQuery);
       return result.length;
@@ -480,7 +512,9 @@ export class ProductsRepository {
       const product = await this.findById(id);
       return product !== null;
     } catch (error) {
-      this.logger.error(`Failed to check if product exists ${id}: ${error.message}`);
+      this.logger.error(
+        `Failed to check if product exists ${id}: ${error.message}`,
+      );
       throw error;
     }
   }
@@ -490,7 +524,9 @@ export class ProductsRepository {
       const product = await this.findBySku(sku);
       return product !== null;
     } catch (error) {
-      this.logger.error(`Failed to check if SKU exists ${sku}: ${error.message}`);
+      this.logger.error(
+        `Failed to check if SKU exists ${sku}: ${error.message}`,
+      );
       throw error;
     }
   }
@@ -500,7 +536,9 @@ export class ProductsRepository {
       const product = await this.findById(id);
       return product ? product.available : false;
     } catch (error) {
-      this.logger.error(`Failed to check if product is available ${id}: ${error.message}`);
+      this.logger.error(
+        `Failed to check if product is available ${id}: ${error.message}`,
+      );
       throw error;
     }
   }
@@ -510,7 +548,9 @@ export class ProductsRepository {
       const product = await this.findById(id);
       return product ? product.stockQuantity >= requiredQuantity : false;
     } catch (error) {
-      this.logger.error(`Failed to check stock for product ${id}: ${error.message}`);
+      this.logger.error(
+        `Failed to check stock for product ${id}: ${error.message}`,
+      );
       throw error;
     }
   }

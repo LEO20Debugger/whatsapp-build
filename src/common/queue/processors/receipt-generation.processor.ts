@@ -1,8 +1,8 @@
-import { Processor, Process } from '@nestjs/bull';
-import { Logger } from '@nestjs/common';
-import { Job } from 'bull';
-import { QUEUE_NAMES } from '../constants/queue-names.constants';
-import { ReceiptGenerationData } from '../services/queue.service';
+import { Processor, Process } from "@nestjs/bull";
+import { Logger } from "@nestjs/common";
+import { Job } from "bull";
+import { QUEUE_NAMES } from "../constants/queue-names.constants";
+import { ReceiptGenerationData } from "../services/queue.service";
 
 export interface Receipt {
   id: string;
@@ -36,15 +36,17 @@ export interface Receipt {
       trackingNumber?: string;
     };
   };
-  format: 'text' | 'pdf' | 'html';
+  format: "text" | "pdf" | "html";
 }
 
 @Processor(QUEUE_NAMES.RECEIPT_GENERATION)
 export class ReceiptGenerationProcessor {
   private readonly logger = new Logger(ReceiptGenerationProcessor.name);
 
-  @Process('generate-receipt')
-  async handleReceiptGeneration(job: Job<ReceiptGenerationData>): Promise<Receipt> {
+  @Process("generate-receipt")
+  async handleReceiptGeneration(
+    job: Job<ReceiptGenerationData>,
+  ): Promise<Receipt> {
     const { data } = job;
     const { orderId, customerPhone, sendViaWhatsApp } = data;
 
@@ -96,7 +98,7 @@ export class ReceiptGenerationProcessor {
    */
   private async generateReceipt(data: ReceiptGenerationData): Promise<Receipt> {
     // Simulate database queries
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise((resolve) => setTimeout(resolve, 100));
 
     // TODO: Fetch actual order and payment data from services
     const mockOrderData = await this.fetchOrderData(data.orderId);
@@ -117,11 +119,11 @@ export class ReceiptGenerationProcessor {
         summary: mockOrderData.summary,
         payment: mockPaymentData,
         deliveryInfo: {
-          estimatedTime: '2-3 business days',
+          estimatedTime: "2-3 business days",
           trackingNumber: `TRK${Date.now()}`,
         },
       },
-      format: 'text',
+      format: "text",
     };
 
     return receipt;
@@ -133,25 +135,25 @@ export class ReceiptGenerationProcessor {
   private async fetchOrderData(orderId: string) {
     // TODO: Replace with actual order service call
     return {
-      customerName: 'John Doe',
+      customerName: "John Doe",
       items: [
         {
-          name: 'Product A',
+          name: "Product A",
           quantity: 2,
-          unitPrice: 25.00,
-          totalPrice: 50.00,
+          unitPrice: 25.0,
+          totalPrice: 50.0,
         },
         {
-          name: 'Product B',
+          name: "Product B",
           quantity: 1,
-          unitPrice: 15.00,
-          totalPrice: 15.00,
+          unitPrice: 15.0,
+          totalPrice: 15.0,
         },
       ],
       summary: {
-        subtotal: 65.00,
-        tax: 6.50,
-        total: 71.50,
+        subtotal: 65.0,
+        tax: 6.5,
+        total: 71.5,
       },
     };
   }
@@ -162,7 +164,7 @@ export class ReceiptGenerationProcessor {
   private async fetchPaymentData(orderId: string) {
     // TODO: Replace with actual payment service call
     return {
-      method: 'Bank Transfer',
+      method: "Bank Transfer",
       reference: `PAY_${orderId.substr(-8)}`,
       verifiedAt: new Date(),
     };
@@ -179,7 +181,7 @@ export class ReceiptGenerationProcessor {
     });
 
     // Simulate database write
-    await new Promise(resolve => setTimeout(resolve, 50));
+    await new Promise((resolve) => setTimeout(resolve, 50));
   }
 
   /**
@@ -196,7 +198,7 @@ export class ReceiptGenerationProcessor {
     const receiptText = this.formatReceiptAsText(receipt);
 
     // Simulate WhatsApp message sending
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise((resolve) => setTimeout(resolve, 100));
 
     this.logger.log(`Receipt sent via WhatsApp`, {
       receiptId: receipt.id,
@@ -209,27 +211,27 @@ export class ReceiptGenerationProcessor {
    */
   private formatReceiptAsText(receipt: Receipt): string {
     const { content } = receipt;
-    
+
     let text = `🧾 *RECEIPT*\n\n`;
     text += `Order: ${content.orderNumber}\n`;
     text += `Customer: ${content.customerInfo.name || content.customerInfo.phone}\n`;
     text += `Date: ${receipt.generatedAt.toLocaleDateString()}\n\n`;
-    
+
     text += `*ITEMS:*\n`;
-    content.items.forEach(item => {
+    content.items.forEach((item) => {
       text += `• ${item.name} x${item.quantity} - $${item.totalPrice.toFixed(2)}\n`;
     });
-    
+
     text += `\n*SUMMARY:*\n`;
     text += `Subtotal: $${content.summary.subtotal.toFixed(2)}\n`;
     text += `Tax: $${content.summary.tax.toFixed(2)}\n`;
     text += `*Total: $${content.summary.total.toFixed(2)}*\n\n`;
-    
+
     text += `*PAYMENT:*\n`;
     text += `Method: ${content.payment.method}\n`;
     text += `Reference: ${content.payment.reference}\n`;
     text += `Verified: ${content.payment.verifiedAt.toLocaleDateString()}\n\n`;
-    
+
     if (content.deliveryInfo) {
       text += `*DELIVERY:*\n`;
       text += `Estimated: ${content.deliveryInfo.estimatedTime}\n`;
@@ -237,16 +239,19 @@ export class ReceiptGenerationProcessor {
         text += `Tracking: ${content.deliveryInfo.trackingNumber}\n`;
       }
     }
-    
+
     text += `\nThank you for your order! 🙏`;
-    
+
     return text;
   }
 
   /**
    * Handle job completion
    */
-  async onCompleted(job: Job<ReceiptGenerationData>, result: Receipt): Promise<void> {
+  async onCompleted(
+    job: Job<ReceiptGenerationData>,
+    result: Receipt,
+  ): Promise<void> {
     this.logger.log(`Receipt generation job completed`, {
       jobId: job.id,
       receiptId: result.id,

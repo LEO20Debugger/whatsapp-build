@@ -1,12 +1,12 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { InjectQueue } from '@nestjs/bull';
-import { Queue, JobOptions } from 'bull';
-import { QUEUE_NAMES } from '../constants/queue-names.constants';
+import { Injectable, Logger } from "@nestjs/common";
+import { InjectQueue } from "@nestjs/bull";
+import { Queue, JobOptions } from "bull";
+import { QUEUE_NAMES } from "../constants/queue-names.constants";
 
 export interface QueuedMessage {
   to: string;
   content: any;
-  messageType: 'text' | 'template' | 'interactive';
+  messageType: "text" | "template" | "interactive";
   originalJobId?: string;
   retryCount?: number;
 }
@@ -32,10 +32,10 @@ export class QueueService {
   constructor(
     @InjectQueue(QUEUE_NAMES.MESSAGE_RETRY)
     private messageRetryQueue: Queue<QueuedMessage>,
-    
+
     @InjectQueue(QUEUE_NAMES.PAYMENT_VERIFICATION)
     private paymentVerificationQueue: Queue<PaymentVerificationData>,
-    
+
     @InjectQueue(QUEUE_NAMES.RECEIPT_GENERATION)
     private receiptGenerationQueue: Queue<ReceiptGenerationData>,
   ) {}
@@ -48,15 +48,11 @@ export class QueueService {
     options?: JobOptions,
   ): Promise<void> {
     try {
-      const job = await this.messageRetryQueue.add(
-        'retry-message',
-        message,
-        {
-          delay: options?.delay || 0,
-          priority: options?.priority || 0,
-          ...options,
-        },
-      );
+      const job = await this.messageRetryQueue.add("retry-message", message, {
+        delay: options?.delay || 0,
+        priority: options?.priority || 0,
+        ...options,
+      });
 
       this.logger.log(`Message queued for retry`, {
         jobId: job.id,
@@ -82,7 +78,7 @@ export class QueueService {
   ): Promise<void> {
     try {
       const job = await this.paymentVerificationQueue.add(
-        'verify-payment',
+        "verify-payment",
         paymentData,
         {
           delay: options?.delay || 0,
@@ -98,10 +94,13 @@ export class QueueService {
         amount: paymentData.amount,
       });
     } catch (error) {
-      this.logger.error(`Failed to queue payment verification: ${error.message}`, {
-        paymentData,
-        error: error.message,
-      });
+      this.logger.error(
+        `Failed to queue payment verification: ${error.message}`,
+        {
+          paymentData,
+          error: error.message,
+        },
+      );
       throw error;
     }
   }
@@ -115,7 +114,7 @@ export class QueueService {
   ): Promise<void> {
     try {
       const job = await this.receiptGenerationQueue.add(
-        'generate-receipt',
+        "generate-receipt",
         receiptData,
         {
           delay: options?.delay || 0,
@@ -131,10 +130,13 @@ export class QueueService {
         sendViaWhatsApp: receiptData.sendViaWhatsApp,
       });
     } catch (error) {
-      this.logger.error(`Failed to queue receipt generation: ${error.message}`, {
-        receiptData,
-        error: error.message,
-      });
+      this.logger.error(
+        `Failed to queue receipt generation: ${error.message}`,
+        {
+          receiptData,
+          error: error.message,
+        },
+      );
       throw error;
     }
   }
@@ -144,10 +146,20 @@ export class QueueService {
    */
   async getQueueStats() {
     try {
-      const [messageRetryStats, paymentVerificationStats, receiptGenerationStats] = await Promise.all([
-        this.getQueueStatistics(this.messageRetryQueue, 'message-retry'),
-        this.getQueueStatistics(this.paymentVerificationQueue, 'payment-verification'),
-        this.getQueueStatistics(this.receiptGenerationQueue, 'receipt-generation'),
+      const [
+        messageRetryStats,
+        paymentVerificationStats,
+        receiptGenerationStats,
+      ] = await Promise.all([
+        this.getQueueStatistics(this.messageRetryQueue, "message-retry"),
+        this.getQueueStatistics(
+          this.paymentVerificationQueue,
+          "payment-verification",
+        ),
+        this.getQueueStatistics(
+          this.receiptGenerationQueue,
+          "receipt-generation",
+        ),
       ]);
 
       return {
@@ -189,7 +201,7 @@ export class QueueService {
       this.paymentVerificationQueue.pause(),
       this.receiptGenerationQueue.pause(),
     ]);
-    this.logger.log('All queues paused');
+    this.logger.log("All queues paused");
   }
 
   /**
@@ -201,7 +213,7 @@ export class QueueService {
       this.paymentVerificationQueue.resume(),
       this.receiptGenerationQueue.resume(),
     ]);
-    this.logger.log('All queues resumed');
+    this.logger.log("All queues resumed");
   }
 
   /**
@@ -214,14 +226,38 @@ export class QueueService {
     };
 
     await Promise.all([
-      this.messageRetryQueue.clean(5 * 60 * 1000, 'completed', cleanOptions.limit),
-      this.messageRetryQueue.clean(24 * 60 * 60 * 1000, 'failed', cleanOptions.limit),
-      this.paymentVerificationQueue.clean(5 * 60 * 1000, 'completed', cleanOptions.limit),
-      this.paymentVerificationQueue.clean(24 * 60 * 60 * 1000, 'failed', cleanOptions.limit),
-      this.receiptGenerationQueue.clean(5 * 60 * 1000, 'completed', cleanOptions.limit),
-      this.receiptGenerationQueue.clean(24 * 60 * 60 * 1000, 'failed', cleanOptions.limit),
+      this.messageRetryQueue.clean(
+        5 * 60 * 1000,
+        "completed",
+        cleanOptions.limit,
+      ),
+      this.messageRetryQueue.clean(
+        24 * 60 * 60 * 1000,
+        "failed",
+        cleanOptions.limit,
+      ),
+      this.paymentVerificationQueue.clean(
+        5 * 60 * 1000,
+        "completed",
+        cleanOptions.limit,
+      ),
+      this.paymentVerificationQueue.clean(
+        24 * 60 * 60 * 1000,
+        "failed",
+        cleanOptions.limit,
+      ),
+      this.receiptGenerationQueue.clean(
+        5 * 60 * 1000,
+        "completed",
+        cleanOptions.limit,
+      ),
+      this.receiptGenerationQueue.clean(
+        24 * 60 * 60 * 1000,
+        "failed",
+        cleanOptions.limit,
+      ),
     ]);
 
-    this.logger.log('All queues cleaned');
+    this.logger.log("All queues cleaned");
   }
 }

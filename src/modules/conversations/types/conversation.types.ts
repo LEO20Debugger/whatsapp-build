@@ -1,16 +1,16 @@
 export enum ConversationState {
-  GREETING = 'greeting',
-  BROWSING_PRODUCTS = 'browsing_products',
-  ADDING_TO_CART = 'adding_to_cart',
-  REVIEWING_ORDER = 'reviewing_order',
-  AWAITING_PAYMENT = 'awaiting_payment',
-  PAYMENT_CONFIRMATION = 'payment_confirmation',
-  ORDER_COMPLETE = 'order_complete'
+  GREETING = "greeting",
+  BROWSING_PRODUCTS = "browsing_products",
+  ADDING_TO_CART = "adding_to_cart",
+  REVIEWING_ORDER = "reviewing_order",
+  AWAITING_PAYMENT = "awaiting_payment",
+  PAYMENT_CONFIRMATION = "payment_confirmation",
+  ORDER_COMPLETE = "order_complete",
 }
 
 // Re-export types from other modules for convenience
-export * from './state-machine.types';
-export * from './input-parser.types';
+export * from "./state-machine.types";
+export * from "./input-parser.types";
 
 export interface OrderItem {
   productId: string;
@@ -40,4 +40,9 @@ export interface BotResponse {
   message: string;
   nextState?: ConversationState;
   context?: Record<string, any>;
+  processingMetadata?: {
+    messageId: string;
+    processedAt: number;
+    processingTime: number;
+  };
 }

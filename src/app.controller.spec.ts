@@ -1,8 +1,8 @@
-import { Test, TestingModule } from '@nestjs/testing';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
+import { Test, TestingModule } from "@nestjs/testing";
+import { AppController } from "./app.controller";
+import { AppService } from "./app.service";
 
-describe('AppController', () => {
+describe("AppController", () => {
   let appController: AppController;
 
   beforeEach(async () => {
@@ -14,17 +14,19 @@ describe('AppController', () => {
     appController = app.get<AppController>(AppController);
   });
 
-  describe('root', () => {
-    it('should return welcome message', () => {
-      expect(appController.getHello()).toBe('WhatsApp Order Bot API is running!');
+  describe("root", () => {
+    it("should return welcome message", () => {
+      expect(appController.getHello()).toBe(
+        "WhatsApp Order Bot API is running!",
+      );
     });
   });
 
-  describe('health', () => {
-    it('should return health status', () => {
+  describe("health", () => {
+    it("should return health status", () => {
       const health = appController.getHealth();
-      expect(health.status).toBe('ok');
-      expect(health.service).toBe('whatsapp-order-bot');
+      expect(health.status).toBe("ok");
+      expect(health.service).toBe("whatsapp-order-bot");
       expect(health.timestamp).toBeDefined();
     });
   });

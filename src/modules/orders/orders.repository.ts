@@ -1,14 +1,20 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { eq, desc, asc, and, gte, lte, inArray } from 'drizzle-orm';
-import { DatabaseService } from '../../database/database.service';
-import { orders, orderItems, customers, products } from '../../database/schema';
-import { Order, NewOrder, UpdateOrder, OrderStatus, OrderWithItems } from '../../database/types';
+import { Injectable, Logger } from "@nestjs/common";
+import { eq, desc, asc, and, gte, lte, inArray } from "drizzle-orm";
+import { DatabaseService } from "../../database/database.service";
+import { orders, orderItems, customers, products } from "../../database/schema";
+import {
+  Order,
+  NewOrder,
+  UpdateOrder,
+  OrderStatus,
+  OrderWithItems,
+} from "../../database/types";
 
 export interface OrderSearchOptions {
   limit?: number;
   offset?: number;
-  sortBy?: 'createdAt' | 'totalAmount' | 'status';
-  sortOrder?: 'asc' | 'desc';
+  sortBy?: "createdAt" | "totalAmount" | "status";
+  sortOrder?: "asc" | "desc";
   status?: OrderStatus | OrderStatus[];
   customerId?: string;
   dateFrom?: Date;
@@ -84,23 +90,28 @@ export class OrdersRepository {
         payments,
       } as OrderWithItems;
     } catch (error) {
-      this.logger.error(`Failed to find order with items by ID ${id}: ${error.message}`);
+      this.logger.error(
+        `Failed to find order with items by ID ${id}: ${error.message}`,
+      );
       throw error;
     }
   }
 
-  async findByCustomerId(customerId: string, options: OrderSearchOptions = {}): Promise<Order[]> {
+  async findByCustomerId(
+    customerId: string,
+    options: OrderSearchOptions = {},
+  ): Promise<Order[]> {
     try {
       const {
         limit = 50,
         offset = 0,
-        sortBy = 'createdAt',
-        sortOrder = 'desc',
+        sortBy = "createdAt",
+        sortOrder = "desc",
         status,
         dateFrom,
         dateTo,
         minAmount,
-        maxAmount
+        maxAmount,
       } = options;
 
       let whereConditions = [eq(orders.customerId, customerId)];
@@ -131,7 +142,8 @@ export class OrdersRepository {
       }
 
       const sortColumn = orders[sortBy];
-      const orderByClause = sortOrder === 'asc' ? asc(sortColumn) : desc(sortColumn);
+      const orderByClause =
+        sortOrder === "asc" ? asc(sortColumn) : desc(sortColumn);
 
       const orderList = await this.databaseService.db
         .select()
@@ -143,23 +155,28 @@ export class OrdersRepository {
 
       return orderList;
     } catch (error) {
-      this.logger.error(`Failed to find orders by customer ID ${customerId}: ${error.message}`);
+      this.logger.error(
+        `Failed to find orders by customer ID ${customerId}: ${error.message}`,
+      );
       throw error;
     }
   }
 
-  async findByStatus(status: OrderStatus | OrderStatus[], options: OrderSearchOptions = {}): Promise<Order[]> {
+  async findByStatus(
+    status: OrderStatus | OrderStatus[],
+    options: OrderSearchOptions = {},
+  ): Promise<Order[]> {
     try {
       const {
         limit = 50,
         offset = 0,
-        sortBy = 'createdAt',
-        sortOrder = 'desc',
+        sortBy = "createdAt",
+        sortOrder = "desc",
         customerId,
         dateFrom,
         dateTo,
         minAmount,
-        maxAmount
+        maxAmount,
       } = options;
 
       let whereConditions = [];
@@ -193,7 +210,8 @@ export class OrdersRepository {
       }
 
       const sortColumn = orders[sortBy];
-      const orderByClause = sortOrder === 'asc' ? asc(sortColumn) : desc(sortColumn);
+      const orderByClause =
+        sortOrder === "asc" ? asc(sortColumn) : desc(sortColumn);
 
       const orderList = await this.databaseService.db
         .select()
@@ -210,7 +228,11 @@ export class OrdersRepository {
     }
   }
 
-  async updateStatus(id: string, status: OrderStatus, notes?: string): Promise<Order> {
+  async updateStatus(
+    id: string,
+    status: OrderStatus,
+    notes?: string,
+  ): Promise<Order> {
     try {
       const updateData: any = { status };
       if (notes) {
@@ -230,12 +252,17 @@ export class OrdersRepository {
       this.logger.log(`Updated order ${id} status to ${status}`);
       return order;
     } catch (error) {
-      this.logger.error(`Failed to update order status ${id}: ${error.message}`);
+      this.logger.error(
+        `Failed to update order status ${id}: ${error.message}`,
+      );
       throw error;
     }
   }
 
-  async updatePaymentReference(id: string, paymentReference: string): Promise<Order> {
+  async updatePaymentReference(
+    id: string,
+    paymentReference: string,
+  ): Promise<Order> {
     try {
       const [order] = await this.databaseService.db
         .update(orders)
@@ -250,7 +277,9 @@ export class OrdersRepository {
       this.logger.log(`Updated payment reference for order ${id}`);
       return order;
     } catch (error) {
-      this.logger.error(`Failed to update payment reference for order ${id}: ${error.message}`);
+      this.logger.error(
+        `Failed to update payment reference for order ${id}: ${error.message}`,
+      );
       throw error;
     }
   }
@@ -301,14 +330,14 @@ export class OrdersRepository {
       const {
         limit = 50,
         offset = 0,
-        sortBy = 'createdAt',
-        sortOrder = 'desc',
+        sortBy = "createdAt",
+        sortOrder = "desc",
         status,
         customerId,
         dateFrom,
         dateTo,
         minAmount,
-        maxAmount
+        maxAmount,
       } = options;
 
       let whereConditions = [];
@@ -344,15 +373,16 @@ export class OrdersRepository {
       }
 
       const sortColumn = orders[sortBy];
-      const orderByClause = sortOrder === 'asc' ? asc(sortColumn) : desc(sortColumn);
+      const orderByClause =
+        sortOrder === "asc" ? asc(sortColumn) : desc(sortColumn);
 
-      const baseQuery = this.databaseService.db
-        .select()
-        .from(orders);
+      const baseQuery = this.databaseService.db.select().from(orders);
 
-      const orderList = await (whereConditions.length > 0 
-        ? baseQuery.where(and(...whereConditions))
-        : baseQuery)
+      const orderList = await (
+        whereConditions.length > 0
+          ? baseQuery.where(and(...whereConditions))
+          : baseQuery
+      )
         .orderBy(orderByClause)
         .limit(limit)
         .offset(offset);
@@ -366,14 +396,8 @@ export class OrdersRepository {
 
   async count(options: OrderSearchOptions = {}): Promise<number> {
     try {
-      const {
-        status,
-        customerId,
-        dateFrom,
-        dateTo,
-        minAmount,
-        maxAmount
-      } = options;
+      const { status, customerId, dateFrom, dateTo, minAmount, maxAmount } =
+        options;
 
       let whereConditions = [];
 
@@ -407,11 +431,9 @@ export class OrdersRepository {
         whereConditions.push(lte(orders.totalAmount, maxAmount.toString()));
       }
 
-      const baseQuery = this.databaseService.db
-        .select()
-        .from(orders);
+      const baseQuery = this.databaseService.db.select().from(orders);
 
-      const result = await (whereConditions.length > 0 
+      const result = await (whereConditions.length > 0
         ? baseQuery.where(and(...whereConditions))
         : baseQuery);
       return result.length;
@@ -426,19 +448,26 @@ export class OrdersRepository {
       const order = await this.findById(id);
       return order !== null;
     } catch (error) {
-      this.logger.error(`Failed to check if order exists ${id}: ${error.message}`);
+      this.logger.error(
+        `Failed to check if order exists ${id}: ${error.message}`,
+      );
       throw error;
     }
   }
 
-  async calculateTotals(orderId: string): Promise<{ subtotal: number; tax: number; total: number }> {
+  async calculateTotals(
+    orderId: string,
+  ): Promise<{ subtotal: number; tax: number; total: number }> {
     try {
       const items = await this.databaseService.db
         .select()
         .from(orderItems)
         .where(eq(orderItems.orderId, orderId));
 
-      const subtotal = items.reduce((sum, item) => sum + parseFloat(item.totalPrice), 0);
+      const subtotal = items.reduce(
+        (sum, item) => sum + parseFloat(item.totalPrice),
+        0,
+      );
       const tax = subtotal * 0.1; // 10% tax rate - this should be configurable
       const total = subtotal + tax;
 
@@ -448,7 +477,9 @@ export class OrdersRepository {
         total: Math.round(total * 100) / 100,
       };
     } catch (error) {
-      this.logger.error(`Failed to calculate totals for order ${orderId}: ${error.message}`);
+      this.logger.error(
+        `Failed to calculate totals for order ${orderId}: ${error.message}`,
+      );
       throw error;
     }
   }
@@ -471,10 +502,14 @@ export class OrdersRepository {
         throw new Error(`Order with ID ${orderId} not found`);
       }
 
-      this.logger.log(`Updated totals for order ${orderId}: subtotal=${totals.subtotal}, tax=${totals.tax}, total=${totals.total}`);
+      this.logger.log(
+        `Updated totals for order ${orderId}: subtotal=${totals.subtotal}, tax=${totals.tax}, total=${totals.total}`,
+      );
       return order;
     } catch (error) {
-      this.logger.error(`Failed to update totals for order ${orderId}: ${error.message}`);
+      this.logger.error(
+        `Failed to update totals for order ${orderId}: ${error.message}`,
+      );
       throw error;
     }
   }

@@ -1,5 +1,5 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { ConversationState } from '../types/conversation.types';
+import { Injectable, Logger } from "@nestjs/common";
+import { ConversationState } from "../types/conversation.types";
 import {
   StateDefinition,
   StateTransition,
@@ -8,7 +8,7 @@ import {
   ValidationResult,
   StateTrigger,
   ContextKey,
-} from '../types/state-machine.types';
+} from "../types/state-machine.types";
 
 @Injectable()
 export class StateMachineService {
@@ -26,7 +26,7 @@ export class StateMachineService {
     const states: StateDefinition[] = [
       {
         state: ConversationState.GREETING,
-        description: 'Initial greeting and welcome state',
+        description: "Initial greeting and welcome state",
         allowedTransitions: [
           ConversationState.BROWSING_PRODUCTS,
           ConversationState.GREETING, // Allow staying in greeting for help
@@ -35,7 +35,7 @@ export class StateMachineService {
       },
       {
         state: ConversationState.BROWSING_PRODUCTS,
-        description: 'Customer browsing available products',
+        description: "Customer browsing available products",
         allowedTransitions: [
           ConversationState.ADDING_TO_CART,
           ConversationState.GREETING,
@@ -45,7 +45,7 @@ export class StateMachineService {
       },
       {
         state: ConversationState.ADDING_TO_CART,
-        description: 'Customer adding products to cart',
+        description: "Customer adding products to cart",
         allowedTransitions: [
           ConversationState.BROWSING_PRODUCTS,
           ConversationState.REVIEWING_ORDER,
@@ -56,7 +56,7 @@ export class StateMachineService {
       },
       {
         state: ConversationState.REVIEWING_ORDER,
-        description: 'Customer reviewing their order before confirmation',
+        description: "Customer reviewing their order before confirmation",
         allowedTransitions: [
           ConversationState.ADDING_TO_CART,
           ConversationState.AWAITING_PAYMENT,
@@ -67,7 +67,7 @@ export class StateMachineService {
       },
       {
         state: ConversationState.AWAITING_PAYMENT,
-        description: 'Order confirmed, waiting for payment',
+        description: "Order confirmed, waiting for payment",
         allowedTransitions: [
           ConversationState.PAYMENT_CONFIRMATION,
           ConversationState.REVIEWING_ORDER,
@@ -77,7 +77,7 @@ export class StateMachineService {
       },
       {
         state: ConversationState.PAYMENT_CONFIRMATION,
-        description: 'Processing payment confirmation',
+        description: "Processing payment confirmation",
         allowedTransitions: [
           ConversationState.ORDER_COMPLETE,
           ConversationState.AWAITING_PAYMENT,
@@ -87,7 +87,7 @@ export class StateMachineService {
       },
       {
         state: ConversationState.ORDER_COMPLETE,
-        description: 'Order successfully completed',
+        description: "Order successfully completed",
         allowedTransitions: [
           ConversationState.GREETING, // Start new conversation
           ConversationState.BROWSING_PRODUCTS, // Browse for new order
@@ -117,9 +117,11 @@ export class StateMachineService {
         trigger: StateTrigger.ADD_TO_CART,
         condition: (context) => {
           // Must have selected a valid product
-          return context[ContextKey.SELECTED_PRODUCTS] && 
-                 Array.isArray(context[ContextKey.SELECTED_PRODUCTS]) &&
-                 context[ContextKey.SELECTED_PRODUCTS].length > 0;
+          return (
+            context[ContextKey.SELECTED_PRODUCTS] &&
+            Array.isArray(context[ContextKey.SELECTED_PRODUCTS]) &&
+            context[ContextKey.SELECTED_PRODUCTS].length > 0
+          );
         },
       },
       {
@@ -141,7 +143,9 @@ export class StateMachineService {
         condition: (context) => {
           // Must have items in cart
           const currentOrder = context[ContextKey.CURRENT_ORDER];
-          return currentOrder && currentOrder.items && currentOrder.items.length > 0;
+          return (
+            currentOrder && currentOrder.items && currentOrder.items.length > 0
+          );
         },
       },
       {
@@ -167,11 +171,13 @@ export class StateMachineService {
         trigger: StateTrigger.CONFIRM_ORDER,
         condition: (context) => {
           const currentOrder = context[ContextKey.CURRENT_ORDER];
-          return currentOrder && 
-                 currentOrder.items && 
-                 currentOrder.items.length > 0 &&
-                 currentOrder.totalAmount && 
-                 currentOrder.totalAmount > 0;
+          return (
+            currentOrder &&
+            currentOrder.items &&
+            currentOrder.items.length > 0 &&
+            currentOrder.totalAmount &&
+            currentOrder.totalAmount > 0
+          );
         },
         action: (context) => {
           // Generate payment reference when confirming order
@@ -193,7 +199,8 @@ export class StateMachineService {
         trigger: StateTrigger.CANCEL_ORDER,
         action: (context) => {
           // Clear order when cancelling
-          const { [ContextKey.CURRENT_ORDER]: removed, ...cleanContext } = context;
+          const { [ContextKey.CURRENT_ORDER]: removed, ...cleanContext } =
+            context;
           return cleanContext;
         },
       },
@@ -218,10 +225,10 @@ export class StateMachineService {
         trigger: StateTrigger.CANCEL_ORDER,
         action: (context) => {
           // Clear order and payment reference when cancelling
-          const { 
-            [ContextKey.CURRENT_ORDER]: removedOrder, 
+          const {
+            [ContextKey.CURRENT_ORDER]: removedOrder,
             [ContextKey.PAYMENT_REFERENCE]: removedRef,
-            ...cleanContext 
+            ...cleanContext
           } = context;
           return cleanContext;
         },
@@ -232,10 +239,12 @@ export class StateMachineService {
         trigger: StateTrigger.PAYMENT_TIMEOUT,
         action: (context) => {
           // Clear order on timeout
-          const { [ContextKey.CURRENT_ORDER]: removed, ...cleanContext } = context;
+          const { [ContextKey.CURRENT_ORDER]: removed, ...cleanContext } =
+            context;
           return {
             ...cleanContext,
-            [ContextKey.ERROR_COUNT]: (context[ContextKey.ERROR_COUNT] || 0) + 1,
+            [ContextKey.ERROR_COUNT]:
+              (context[ContextKey.ERROR_COUNT] || 0) + 1,
           };
         },
       },
@@ -253,7 +262,8 @@ export class StateMachineService {
         action: (context) => {
           return {
             ...context,
-            [ContextKey.RETRY_COUNT]: (context[ContextKey.RETRY_COUNT] || 0) + 1,
+            [ContextKey.RETRY_COUNT]:
+              (context[ContextKey.RETRY_COUNT] || 0) + 1,
           };
         },
       },
@@ -262,10 +272,10 @@ export class StateMachineService {
         to: ConversationState.GREETING,
         trigger: StateTrigger.CANCEL_ORDER,
         action: (context) => {
-          const { 
-            [ContextKey.CURRENT_ORDER]: removedOrder, 
+          const {
+            [ContextKey.CURRENT_ORDER]: removedOrder,
             [ContextKey.PAYMENT_REFERENCE]: removedRef,
-            ...cleanContext 
+            ...cleanContext
           } = context;
           return cleanContext;
         },
@@ -278,11 +288,11 @@ export class StateMachineService {
         trigger: StateTrigger.START_OVER,
         action: (context) => {
           // Clear all order-related context
-          const { 
-            [ContextKey.CURRENT_ORDER]: removedOrder, 
+          const {
+            [ContextKey.CURRENT_ORDER]: removedOrder,
             [ContextKey.PAYMENT_REFERENCE]: removedRef,
             [ContextKey.SELECTED_PRODUCTS]: removedProducts,
-            ...cleanContext 
+            ...cleanContext
           } = context;
           return cleanContext;
         },
@@ -293,11 +303,11 @@ export class StateMachineService {
         trigger: StateTrigger.VIEW_PRODUCTS,
         action: (context) => {
           // Clear previous order but keep customer info
-          const { 
-            [ContextKey.CURRENT_ORDER]: removedOrder, 
+          const {
+            [ContextKey.CURRENT_ORDER]: removedOrder,
             [ContextKey.PAYMENT_REFERENCE]: removedRef,
             [ContextKey.SELECTED_PRODUCTS]: removedProducts,
-            ...cleanContext 
+            ...cleanContext
           } = context;
           return cleanContext;
         },
@@ -350,7 +360,7 @@ export class StateMachineService {
     fromState: ConversationState,
     toState: ConversationState,
     trigger: StateTrigger,
-    context: Record<string, any> = {}
+    context: Record<string, any> = {},
   ): boolean {
     try {
       // Check if the target state is in allowed transitions
@@ -361,7 +371,8 @@ export class StateMachineService {
 
       // Find matching transition
       const transition = this.config.transitions.find(
-        t => t.from === fromState && t.to === toState && t.trigger === trigger
+        (t) =>
+          t.from === fromState && t.to === toState && t.trigger === trigger,
       );
 
       if (!transition) {
@@ -375,7 +386,7 @@ export class StateMachineService {
 
       return true;
     } catch (error) {
-      this.logger.error('Error checking transition validity', {
+      this.logger.error("Error checking transition validity", {
         fromState,
         toState,
         trigger,
@@ -391,12 +402,12 @@ export class StateMachineService {
   executeTransition(
     fromState: ConversationState,
     trigger: StateTrigger,
-    context: Record<string, any> = {}
+    context: Record<string, any> = {},
   ): TransitionResult {
     try {
       // Find all possible transitions from current state with the given trigger
       const possibleTransitions = this.config.transitions.filter(
-        t => t.from === fromState && t.trigger === trigger
+        (t) => t.from === fromState && t.trigger === trigger,
       );
 
       if (possibleTransitions.length === 0) {
@@ -416,7 +427,7 @@ export class StateMachineService {
             newContext = transition.action(newContext);
           }
 
-          this.logger.debug('State transition executed', {
+          this.logger.debug("State transition executed", {
             from: fromState,
             to: transition.to,
             trigger,
@@ -435,7 +446,7 @@ export class StateMachineService {
         error: `Transition conditions not met from ${fromState} with trigger ${trigger}`,
       };
     } catch (error) {
-      this.logger.error('Error executing transition', {
+      this.logger.error("Error executing transition", {
         fromState,
         trigger,
         error: error.message,
@@ -452,7 +463,7 @@ export class StateMachineService {
    * Get state definition
    */
   getStateDefinition(state: ConversationState): StateDefinition | undefined {
-    return this.config.states.find(s => s.state === state);
+    return this.config.states.find((s) => s.state === state);
   }
 
   /**
@@ -486,7 +497,7 @@ export class StateMachineService {
     const errors: string[] = [];
 
     // Check if all states are defined
-    const definedStates = new Set(this.config.states.map(s => s.state));
+    const definedStates = new Set(this.config.states.map((s) => s.state));
     const allStates = new Set(Object.values(ConversationState));
 
     for (const state of allStates) {
@@ -498,10 +509,14 @@ export class StateMachineService {
     // Check if all transitions reference valid states
     for (const transition of this.config.transitions) {
       if (!definedStates.has(transition.from)) {
-        errors.push(`Transition references undefined from state: ${transition.from}`);
+        errors.push(
+          `Transition references undefined from state: ${transition.from}`,
+        );
       }
       if (!definedStates.has(transition.to)) {
-        errors.push(`Transition references undefined to state: ${transition.to}`);
+        errors.push(
+          `Transition references undefined to state: ${transition.to}`,
+        );
       }
     }
 
@@ -510,7 +525,7 @@ export class StateMachineService {
       for (const allowedTransition of stateDefinition.allowedTransitions) {
         if (!definedStates.has(allowedTransition)) {
           errors.push(
-            `State ${stateDefinition.state} allows transition to undefined state: ${allowedTransition}`
+            `State ${stateDefinition.state} allows transition to undefined state: ${allowedTransition}`,
           );
         }
       }
@@ -543,9 +558,9 @@ export class StateMachineService {
    */
   getAvailableTriggers(state: ConversationState): StateTrigger[] {
     const triggers = this.config.transitions
-      .filter(t => t.from === state)
-      .map(t => t.trigger as StateTrigger);
-    
+      .filter((t) => t.from === state)
+      .map((t) => t.trigger as StateTrigger);
+
     return [...new Set(triggers)]; // Remove duplicates
   }
 
@@ -560,14 +575,17 @@ export class StateMachineService {
   } {
     const totalStates = this.config.states.length;
     const totalTransitions = this.config.transitions.length;
-    const terminalStates = this.config.states.filter(s => s.isTerminal).length;
+    const terminalStates = this.config.states.filter(
+      (s) => s.isTerminal,
+    ).length;
     const averageTransitionsPerState = totalTransitions / totalStates;
 
     return {
       totalStates,
       totalTransitions,
       terminalStates,
-      averageTransitionsPerState: Math.round(averageTransitionsPerState * 100) / 100,
+      averageTransitionsPerState:
+        Math.round(averageTransitionsPerState * 100) / 100,
     };
   }
 }

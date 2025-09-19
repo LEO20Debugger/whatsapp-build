@@ -1,4 +1,4 @@
-import { ConversationState } from './conversation.types';
+import { ConversationState } from "./conversation.types";
 
 /**
  * Represents a state transition with validation rules
@@ -54,39 +54,39 @@ export interface ValidationResult {
  */
 export enum StateTrigger {
   // User actions
-  START_CONVERSATION = 'start_conversation',
-  VIEW_PRODUCTS = 'view_products',
-  ADD_TO_CART = 'add_to_cart',
-  REMOVE_FROM_CART = 'remove_from_cart',
-  REVIEW_ORDER = 'review_order',
-  CONFIRM_ORDER = 'confirm_order',
-  CANCEL_ORDER = 'cancel_order',
-  MAKE_PAYMENT = 'make_payment',
-  CONFIRM_PAYMENT = 'confirm_payment',
-  REQUEST_HELP = 'request_help',
-  
+  START_CONVERSATION = "start_conversation",
+  VIEW_PRODUCTS = "view_products",
+  ADD_TO_CART = "add_to_cart",
+  REMOVE_FROM_CART = "remove_from_cart",
+  REVIEW_ORDER = "review_order",
+  CONFIRM_ORDER = "confirm_order",
+  CANCEL_ORDER = "cancel_order",
+  MAKE_PAYMENT = "make_payment",
+  CONFIRM_PAYMENT = "confirm_payment",
+  REQUEST_HELP = "request_help",
+
   // System actions
-  PAYMENT_TIMEOUT = 'payment_timeout',
-  PAYMENT_VERIFIED = 'payment_verified',
-  PAYMENT_FAILED = 'payment_failed',
-  ORDER_COMPLETED = 'order_completed',
-  SESSION_TIMEOUT = 'session_timeout',
-  ERROR_OCCURRED = 'error_occurred',
-  
+  PAYMENT_TIMEOUT = "payment_timeout",
+  PAYMENT_VERIFIED = "payment_verified",
+  PAYMENT_FAILED = "payment_failed",
+  ORDER_COMPLETED = "order_completed",
+  SESSION_TIMEOUT = "session_timeout",
+  ERROR_OCCURRED = "error_occurred",
+
   // Navigation
-  GO_BACK = 'go_back',
-  START_OVER = 'start_over',
+  GO_BACK = "go_back",
+  START_OVER = "start_over",
 }
 
 /**
  * Context keys used in state machine
  */
 export enum ContextKey {
-  CURRENT_ORDER = 'currentOrder',
-  SELECTED_PRODUCTS = 'selectedProducts',
-  PAYMENT_REFERENCE = 'paymentReference',
-  CUSTOMER_INFO = 'customerInfo',
-  ERROR_COUNT = 'errorCount',
-  LAST_MESSAGE = 'lastMessage',
-  RETRY_COUNT = 'retryCount',
+  CURRENT_ORDER = "currentOrder",
+  SELECTED_PRODUCTS = "selectedProducts",
+  PAYMENT_REFERENCE = "paymentReference",
+  CUSTOMER_INFO = "customerInfo",
+  ERROR_COUNT = "errorCount",
+  LAST_MESSAGE = "lastMessage",
+  RETRY_COUNT = "retryCount",
 }

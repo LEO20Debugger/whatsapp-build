@@ -1,7 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { InjectQueue } from '@nestjs/bull';
-import { Queue } from 'bull';
-import { QUEUE_NAMES } from '../constants/queue-names.constants';
+import { Injectable, Logger } from "@nestjs/common";
+import { InjectQueue } from "@nestjs/bull";
+import { Queue } from "bull";
+import { QUEUE_NAMES } from "../constants/queue-names.constants";
 
 export interface QueueHealthStatus {
   name: string;
@@ -35,10 +35,10 @@ export class QueueHealthService {
   constructor(
     @InjectQueue(QUEUE_NAMES.MESSAGE_RETRY)
     private messageRetryQueue: Queue,
-    
+
     @InjectQueue(QUEUE_NAMES.PAYMENT_VERIFICATION)
     private paymentVerificationQueue: Queue,
-    
+
     @InjectQueue(QUEUE_NAMES.RECEIPT_GENERATION)
     private receiptGenerationQueue: Queue,
   ) {}
@@ -48,16 +48,18 @@ export class QueueHealthService {
    */
   async checkQueueHealth(): Promise<OverallQueueHealth> {
     const queues = [
-      { name: 'message-retry', queue: this.messageRetryQueue },
-      { name: 'payment-verification', queue: this.paymentVerificationQueue },
-      { name: 'receipt-generation', queue: this.receiptGenerationQueue },
+      { name: "message-retry", queue: this.messageRetryQueue },
+      { name: "payment-verification", queue: this.paymentVerificationQueue },
+      { name: "receipt-generation", queue: this.receiptGenerationQueue },
     ];
 
     const queueHealthStatuses = await Promise.all(
-      queues.map(({ name, queue }) => this.checkSingleQueueHealth(name, queue))
+      queues.map(({ name, queue }) => this.checkSingleQueueHealth(name, queue)),
     );
 
-    const healthyQueues = queueHealthStatuses.filter(status => status.isHealthy).length;
+    const healthyQueues = queueHealthStatuses.filter(
+      (status) => status.isHealthy,
+    ).length;
     const unhealthyQueues = queueHealthStatuses.length - healthyQueues;
 
     return {
@@ -74,7 +76,10 @@ export class QueueHealthService {
   /**
    * Check health of a single queue
    */
-  private async checkSingleQueueHealth(name: string, queue: Queue): Promise<QueueHealthStatus> {
+  private async checkSingleQueueHealth(
+    name: string,
+    queue: Queue,
+  ): Promise<QueueHealthStatus> {
     try {
       const [waiting, active, completed, failed, delayed] = await Promise.all([
         queue.getWaiting(),
@@ -85,23 +90,23 @@ export class QueueHealthService {
       ]);
 
       const isPaused = await queue.isPaused();
-      
+
       // Consider queue unhealthy if:
       // 1. It has too many failed jobs (more than 50)
       // 2. It has jobs stuck in active state for too long (more than 100)
       // 3. It's paused unexpectedly
       const tooManyFailedJobs = failed.length > 50;
       const tooManyActiveJobs = active.length > 100;
-      
+
       const isHealthy = !tooManyFailedJobs && !tooManyActiveJobs;
-      
+
       let error: string | undefined;
       if (tooManyFailedJobs) {
         error = `Too many failed jobs: ${failed.length}`;
       } else if (tooManyActiveJobs) {
         error = `Too many active jobs: ${active.length}`;
       } else if (isPaused) {
-        error = 'Queue is paused';
+        error = "Queue is paused";
       }
 
       return {
@@ -119,8 +124,10 @@ export class QueueHealthService {
         },
       };
     } catch (error) {
-      this.logger.error(`Failed to check health for queue ${name}: ${error.message}`);
-      
+      this.logger.error(
+        `Failed to check health for queue ${name}: ${error.message}`,
+      );
+
       return {
         name,
         isHealthy: false,
@@ -144,7 +151,7 @@ export class QueueHealthService {
   async getQueueMetrics() {
     try {
       const health = await this.checkQueueHealth();
-      
+
       return {
         timestamp: new Date().toISOString(),
         overall: {
@@ -153,7 +160,7 @@ export class QueueHealthService {
           healthyQueues: health.summary.healthyQueues,
           unhealthyQueues: health.summary.unhealthyQueues,
         },
-        queues: health.queues.map(queue => ({
+        queues: health.queues.map((queue) => ({
           name: queue.name,
           isHealthy: queue.isHealthy,
           error: queue.error,
@@ -172,28 +179,37 @@ export class QueueHealthService {
   async monitorQueues(): Promise<void> {
     try {
       const health = await this.checkQueueHealth();
-      
+
       for (const queueStatus of health.queues) {
         if (!queueStatus.isHealthy) {
-          this.logger.warn(`Queue ${queueStatus.name} is unhealthy: ${queueStatus.error}`, {
-            queue: queueStatus.name,
-            details: queueStatus.details,
-          });
+          this.logger.warn(
+            `Queue ${queueStatus.name} is unhealthy: ${queueStatus.error}`,
+            {
+              queue: queueStatus.name,
+              details: queueStatus.details,
+            },
+          );
         }
 
         // Log warnings for concerning metrics
         const { details } = queueStatus;
-        
+
         if (details.failed > 10) {
-          this.logger.warn(`Queue ${queueStatus.name} has ${details.failed} failed jobs`);
+          this.logger.warn(
+            `Queue ${queueStatus.name} has ${details.failed} failed jobs`,
+          );
         }
-        
+
         if (details.waiting > 100) {
-          this.logger.warn(`Queue ${queueStatus.name} has ${details.waiting} waiting jobs`);
+          this.logger.warn(
+            `Queue ${queueStatus.name} has ${details.waiting} waiting jobs`,
+          );
         }
-        
+
         if (details.active > 50) {
-          this.logger.warn(`Queue ${queueStatus.name} has ${details.active} active jobs`);
+          this.logger.warn(
+            `Queue ${queueStatus.name} has ${details.active} active jobs`,
+          );
         }
       }
     } catch (error) {
