@@ -4,9 +4,10 @@ import { StateMachineService } from "./services/state-machine.service";
 import { InputParserService } from "./services/input-parser.service";
 import { ConversationFlowService } from "./services/conversation-flow.service";
 import { RedisModule } from "../../common/redis/redis.module";
+import { ProductsModule } from 'src/modules/products/products.module';
 
 @Module({
-  imports: [RedisModule],
+  imports: [RedisModule, ProductsModule],
   controllers: [],
   providers: [
     ConversationSessionService,

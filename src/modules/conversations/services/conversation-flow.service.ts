@@ -13,6 +13,7 @@ import { StateTrigger, ContextKey } from "../types/state-machine.types";
 import { StateMachineService } from "./state-machine.service";
 import { InputParserService } from "./input-parser.service";
 import { ConversationSessionService } from "./conversation-session.service";
+import { ProductsRepository } from "src/modules/products/products.repository";
 
 @Injectable()
 export class ConversationFlowService {
@@ -22,11 +23,9 @@ export class ConversationFlowService {
     private readonly stateMachineService: StateMachineService,
     private readonly inputParserService: InputParserService,
     private readonly sessionService: ConversationSessionService,
+    private readonly productsRepository: ProductsRepository,
   ) {}
 
-  /**
-   * Process incoming message and generate response
-   */
   async processMessage(
     phoneNumber: string,
     message: string,
@@ -85,9 +84,6 @@ export class ConversationFlowService {
     }
   }
 
-  /**
-   * Handle conversation flow based on current state
-   */
   private async handleStateFlow(
     session: ConversationSession,
     parsedInput: ParsedInput,
@@ -117,9 +113,6 @@ export class ConversationFlowService {
     };
   }
 
-  /**
-   * Handle greeting state
-   */
   private handleGreetingState(
     session: ConversationSession,
     parsedInput: ParsedInput,
@@ -128,13 +121,13 @@ export class ConversationFlowService {
 
     if (intent === UserIntent.GET_HELP) {
       return {
-        message: `🤖 **HELP MENU**\n\n1️⃣ View our menu\n2️⃣ Place an order\n3️⃣ Check order status\n4️⃣ Start over\n5️⃣ Contact support\n0️⃣ Go back\n\n💡 **TIPS:**\n• Use numbers (1-5) for quick selection\n• Type "menu" to see products\n• Type "0" to go back anytime\n\nType a number (0-5):`,
+        message: `🤖 **HELP MENU**\n\n1️⃣ Browse products\n2️⃣ Place an order\n3️⃣ Check order status\n4️⃣ Start over\n5️⃣ Contact support\n0️⃣ Go back\n\nType a number (0-5):`,
       };
     }
 
     if (trigger === StateTrigger.VIEW_PRODUCTS) {
       return {
-        message: `Great! Let me show you our available products.\n\nPlease wait while I fetch our current menu...`,
+        message: `Great! Let me show you our available products...\nPlease wait while I fetch our current menu...`,
         nextState: ConversationState.BROWSING_PRODUCTS,
       };
     }
@@ -144,23 +137,20 @@ export class ConversationFlowService {
       intent === UserIntent.GREETING
     ) {
       return {
-        message: `Hello! 👋 Welcome to our WhatsApp ordering service!\n\n🍽️ I can help you:\n• Browse our products\n• Place orders\n• Make payments\n\n📱 **QUICK START:**\n• Type "menu" to see our products\n• Type "help" for more options\n• Use numbers (1-5) to order quickly!\n\nWhat would you like to do today?`,
+        message: `Hello! 👋 Welcome to our WhatsApp ordering service!\n\n📱 **MAIN MENU**\n1️⃣ Browse products\n2️⃣ Place an order\n3️⃣ Make payment\n4️⃣ Get help\n0️⃣ Exit\n\nType the number of your choice:`,
       };
     }
 
     return {
-      message: `Hi there! I'm here to help you place an order.\n\nType "menu" to see our products or "help" for assistance.`,
+      message: `Hi there! I'm here to help you place an order.\n\nType a number from the main menu or "help" for assistance.`,
     };
   }
 
-  /**
-   * Handle browsing products state
-   */
-  private handleBrowsingProductsState(
+  private async handleBrowsingProductsState(
     session: ConversationSession,
     parsedInput: ParsedInput,
-  ): BotResponse {
-    const { intent, trigger, entities } = parsedInput;
+  ): Promise<BotResponse> {
+    const { trigger, entities } = parsedInput;
 
     if (trigger === StateTrigger.GO_BACK)
       return {
@@ -177,74 +167,82 @@ export class ConversationFlowService {
         entities,
         EntityType.QUANTITY,
       );
+
       if (productEntity) {
         const quantity = quantityEntity ? parseInt(quantityEntity.value) : 1;
+
+        // fetch dynamic price from repository
+        const products = await this.productsRepository.findAll({
+          availableOnly: true,
+          limit: 50,
+        });
+        const matchedProduct = products.find(
+          (p) => p.name.toLowerCase() === productEntity.value.toLowerCase(),
+        );
+
+        const price = matchedProduct?.price ?? null;
+
+        if (price === null) {
+          return {
+            message: `Sorry, I couldn't find "${productEntity.value}" in our menu.`,
+          };
+        }
+
+        session.context[ContextKey.SELECTED_PRODUCTS] = [
+          { name: productEntity.value, quantity, price },
+        ];
+
         return {
-          message: `✅ Adding ${quantity}x ${productEntity.value} to your cart...\n\nWhat would you like to do next?\n\n1️⃣ Add more items\n2️⃣ Review your order\n3️⃣ Continue browsing\n0️⃣ Go back\n\nType a number (0-3):`,
+          message: `✅ Adding ${quantity}x ${productEntity.value} to your cart...\n\n1️⃣ Add more items\n2️⃣ Review your order\n3️⃣ Continue browsing\n0️⃣ Go back\n\nType a number (0-3):`,
           nextState: ConversationState.ADDING_TO_CART,
-          context: {
-            ...session.context,
-            [ContextKey.SELECTED_PRODUCTS]: [
-              { name: productEntity.value, quantity },
-            ],
-          },
+          context: session.context,
         };
       } else {
         return {
-          message: `Please tell me which product you'd like and how many.\nFor example:\n• "2 pizzas"\n• "1 burger"\n• "3 coffees"\n\nWhat would you like to order?`,
+          message: `Please tell me which product you'd like and how many.\nFor example:\n• "2 pizzas"\n• "1 burger"\n\nWhat would you like to order?`,
         };
       }
     }
 
-    if (intent === UserIntent.SEARCH_PRODUCT) {
-      const productEntity = this.inputParserService.getEntityByType(
-        entities,
-        EntityType.PRODUCT_NAME,
-      );
-      if (productEntity) {
-        return {
-          message: `Searching for "${productEntity.value}"...\n\nHere are the matching products:\n[Product search results would be displayed here]\n\nTo add any item to your cart, just say "add [product name]" or "I want [product name]".`,
-        };
-      }
-    }
+    // Display menu dynamically
+    const products = await this.productsRepository.findAvailableProducts({
+      limit: 50,
+      sortBy: "name",
+    });
+    const menu = products
+      .map((p, i) => `${i + 1}️⃣ ${p.name} - ₦${p.price}`)
+      .join("\n");
 
     return {
-      message: `🍽️ **OUR MENU**\n\n1️⃣ Pizza - ₦4,500\n2️⃣ Burger - ₦3,200\n3️⃣ Salad - ₦2,800\n4️⃣ Coffee - ₦1,400\n5️⃣ Soda - ₦900\n\n📱 **HOW TO ORDER:**\n• Type the number: "1" for Pizza\n• Or type: "1 pizza" or "2 burgers"\n• Or say: "I want option 3"\n\n🛒 Type a number to add to cart!\n🔙 Type "0" to go back\n\nWhat would you like to order?`,
+      message: `🍽️ **OUR MENU**\n\n${menu}\n\nType the number to add to cart or 0 to go back.`,
     };
   }
 
-  /**
-   * Handle adding to cart state
-   */
   private async handleAddingToCartState(
     session: ConversationSession,
     parsedInput: ParsedInput,
   ): Promise<BotResponse> {
-    const { trigger, entities } = parsedInput;
+    const { trigger } = parsedInput;
 
-    // Merge selected products into current order
     const selectedProducts =
       session.context[ContextKey.SELECTED_PRODUCTS] || [];
     let currentOrder = session.context[ContextKey.CURRENT_ORDER] || {
       items: [],
     };
 
-    selectedProducts.forEach((product: any) => {
+    for (const product of selectedProducts) {
       const existing = currentOrder.items.find(
         (i: any) => i.name === product.name,
       );
       if (existing) existing.quantity += product.quantity;
-      else
-        currentOrder.items.push({
-          ...product,
-          price: this.getProductPrice(product.name),
-        });
-    });
+      else currentOrder.items.push(product);
+    }
 
     currentOrder.totalAmount = currentOrder.items.reduce(
       (sum, item) => sum + (item.price || 0) * (item.quantity || 1),
       0,
     );
+
     session.context[ContextKey.CURRENT_ORDER] = currentOrder;
     session.context[ContextKey.SELECTED_PRODUCTS] = [];
     await this.sessionService.updateContext(
@@ -264,86 +262,11 @@ export class ConversationFlowService {
       };
     }
 
-    if (trigger === StateTrigger.ADD_TO_CART) {
-      const productEntity = this.inputParserService.getEntityByType(
-        entities,
-        EntityType.PRODUCT_NAME,
-      );
-      const quantityEntity = this.inputParserService.getEntityByType(
-        entities,
-        EntityType.QUANTITY,
-      );
-      if (productEntity) {
-        const quantity = quantityEntity ? parseInt(quantityEntity.value) : 1;
-        const existing = currentOrder.items.find(
-          (i: any) => i.name === productEntity.value,
-        );
-        if (existing) existing.quantity += quantity;
-        else
-          currentOrder.items.push({
-            name: productEntity.value,
-            quantity,
-            price: this.getProductPrice(productEntity.value),
-          });
-
-        currentOrder.totalAmount = currentOrder.items.reduce(
-          (sum, item) => sum + (item.price || 0) * (item.quantity || 1),
-          0,
-        );
-        session.context[ContextKey.CURRENT_ORDER] = currentOrder;
-        await this.sessionService.updateContext(
-          session.phoneNumber,
-          session.context,
-        );
-
-        return {
-          message: `Added ${quantity}x ${productEntity.value} to your cart!\n\nYour cart now has:\n${this.formatOrderSummary(currentOrder)}\n\nWould you like to:\n• Add more items\n• Review your complete order\n• Continue shopping`,
-        };
-      }
-    }
-
-    if (trigger === StateTrigger.REMOVE_FROM_CART) {
-      const productEntity = this.inputParserService.getEntityByType(
-        entities,
-        EntityType.PRODUCT_NAME,
-      );
-      if (productEntity) {
-        currentOrder.items = currentOrder.items.filter(
-          (i) => i.name !== productEntity.value,
-        );
-        currentOrder.totalAmount = currentOrder.items.reduce(
-          (sum, item) => sum + (item.price || 0) * (item.quantity || 1),
-          0,
-        );
-        session.context[ContextKey.CURRENT_ORDER] = currentOrder;
-        await this.sessionService.updateContext(
-          session.phoneNumber,
-          session.context,
-        );
-        return {
-          message: `Removed ${productEntity.value} from your cart.\n\nYour updated cart:\n${this.formatOrderSummary(currentOrder)}`,
-        };
-      } else {
-        return {
-          message: "Which item would you like to remove from your cart?",
-        };
-      }
-    }
-
-    if (trigger === StateTrigger.VIEW_PRODUCTS)
-      return {
-        message: "Let me show you our products again.",
-        nextState: ConversationState.BROWSING_PRODUCTS,
-      };
-
     return {
       message: `🛒 **CART OPTIONS**\n\n1️⃣ Add more items\n2️⃣ Remove items\n3️⃣ Review my order\n4️⃣ Keep shopping\n5️⃣ Checkout now\n0️⃣ Go back\n\nType a number (0-5):`,
     };
   }
 
-  /**
-   * Handle reviewing order state
-   */
   private handleReviewingOrderState(
     session: ConversationSession,
     parsedInput: ParsedInput,
@@ -357,7 +280,7 @@ export class ConversationFlowService {
     ) {
       const paymentReference = this.generatePaymentReference();
       return {
-        message: `Perfect! Your order has been confirmed.\n\n${this.formatOrderSummary(currentOrder)}\n\n💳 Payment Details:\nReference: ${paymentReference}\nAmount: $${currentOrder.totalAmount || "0.00"}\n\nPlease send your payment and reply with "paid" when done.`,
+        message: `Perfect! Your order has been confirmed.\n\n${this.formatOrderSummary(currentOrder)}\n\n💳 Payment Details:\nReference: ${paymentReference}\nAmount: ₦${currentOrder.totalAmount || "0.00"}\n\nPlease send your payment and reply with "paid" when done.`,
         nextState: ConversationState.AWAITING_PAYMENT,
         context: {
           ...session.context,
@@ -366,26 +289,11 @@ export class ConversationFlowService {
       };
     }
 
-    if (trigger === StateTrigger.ADD_TO_CART)
-      return {
-        message: "Let me help you add more items to your order.",
-        nextState: ConversationState.ADDING_TO_CART,
-      };
-    if (trigger === StateTrigger.CANCEL_ORDER)
-      return {
-        message: "Order cancelled. Would you like to start a new order?",
-        nextState: ConversationState.GREETING,
-        context: {},
-      };
-
     return {
       message: `${this.formatOrderSummary(currentOrder)}\n\n📋 **ORDER REVIEW**\n\n1️⃣ Confirm & place order\n2️⃣ Add more items\n3️⃣ Remove items\n4️⃣ Cancel order\n0️⃣ Go back\n\nType a number (0-4):`,
     };
   }
 
-  /**
-   * Handle awaiting payment state
-   */
   private handleAwaitingPaymentState(
     session: ConversationSession,
     parsedInput: ParsedInput,
@@ -394,53 +302,35 @@ export class ConversationFlowService {
 
     if (trigger === StateTrigger.CONFIRM_PAYMENT) {
       return {
-        message: `Thank you! I'm verifying your payment...\n\nReference: ${session.context[ContextKey.PAYMENT_REFERENCE]}\n\nPlease wait while I confirm your payment. This usually takes 1-2 minutes.`,
+        message: `Thank you! I'm verifying your payment...\n\nReference: ${session.context[ContextKey.PAYMENT_REFERENCE]}\nPlease wait while I confirm your payment.`,
         nextState: ConversationState.PAYMENT_CONFIRMATION,
       };
     }
 
-    if (trigger === StateTrigger.GO_BACK)
-      return {
-        message: "Going back to order review.",
-        nextState: ConversationState.REVIEWING_ORDER,
-      };
-    if (trigger === StateTrigger.CANCEL_ORDER)
-      return {
-        message:
-          "Order cancelled. Your payment (if sent) will be refunded within 24 hours.",
-        nextState: ConversationState.GREETING,
-      };
-
     return {
-      message: `Waiting for your payment...\n\n💳 Payment Details:\nReference: ${session.context[ContextKey.PAYMENT_REFERENCE]}\nAmount: $${session.context[ContextKey.CURRENT_ORDER]?.totalAmount || "0.00"}\n\nAfter sending payment, reply with "paid" or "payment sent".\nNeed help? Type "help" or "cancel" to cancel the order.`,
+      message: `Waiting for your payment...\n\n💳 Reference: ${session.context[ContextKey.PAYMENT_REFERENCE]}\nAmount: ₦${session.context[ContextKey.CURRENT_ORDER]?.totalAmount || "0.00"}\n\nReply "paid" when done or "cancel" to cancel the order.`,
     };
   }
 
-  /**
-   * Handle payment confirmation state
-   */
   private handlePaymentConfirmationState(
     session: ConversationSession,
     parsedInput: ParsedInput,
   ): BotResponse {
-    const isPaymentVerified = Math.random() > 0.2; // 80% success demo
+    const isPaymentVerified = Math.random() > 0.2; // demo
 
     if (isPaymentVerified) {
       return {
-        message: `🎉 Payment confirmed! Your order is being prepared.\n\nOrder Details:\n${this.formatOrderSummary(session.context[ContextKey.CURRENT_ORDER])}\n\n📧 You'll receive updates via WhatsApp\n⏰ Estimated delivery: 30-45 minutes\n\nThank you for your order!\n\nType "new order" to place another order.`,
+        message: `🎉 Payment confirmed! Your order is being prepared.\n\nOrder Details:\n${this.formatOrderSummary(session.context[ContextKey.CURRENT_ORDER])}\n⏰ Estimated delivery: 30-45 minutes\n\nThank you for your order!\n\nType "new order" to place another order.`,
         nextState: ConversationState.ORDER_COMPLETE,
       };
     }
 
     return {
-      message: `❌ Payment verification failed.\n\nThis could be because:\n• Payment is still processing\n• Incorrect reference number\n• Payment amount doesn't match\n\nPlease try again or contact support.\nReference: ${session.context[ContextKey.PAYMENT_REFERENCE]}`,
+      message: `❌ Payment verification failed.\nPlease try again or contact support.\nReference: ${session.context[ContextKey.PAYMENT_REFERENCE]}`,
       nextState: ConversationState.AWAITING_PAYMENT,
     };
   }
 
-  /**
-   * Handle order complete state
-   */
   private handleOrderCompleteState(
     session: ConversationSession,
     parsedInput: ParsedInput,
@@ -463,40 +353,20 @@ export class ConversationFlowService {
     };
   }
 
-  /**
-   * Format order summary for display
-   */
   private formatOrderSummary(order: any): string {
     if (!order?.items?.length) return "Your cart is empty.";
     let summary = "📋 Your Order:\n";
     order.items.forEach((item: any, i: number) => {
       const itemTotal = (item.price || 0) * (item.quantity || 1);
-      summary += `${i + 1}. ${item.name} x${item.quantity} - $${itemTotal.toFixed(2)}\n`;
+      summary += `${i + 1}. ${item.name} x${item.quantity} - ₦${itemTotal.toFixed(2)}\n`;
     });
-    summary += `\n💰 Total: $${order.totalAmount?.toFixed(2) || "0.00"}`;
+    summary += `\n💰 Total: ₦${order.totalAmount?.toFixed(2) || "0.00"}`;
     return summary;
   }
 
-  /**
-   * Generate payment reference
-   */
   private generatePaymentReference(): string {
     const timestamp = Date.now().toString(36);
     const random = Math.random().toString(36).substring(2, 8);
     return `PAY-${timestamp}-${random}`.toUpperCase();
-  }
-
-  /**
-   * Get product price
-   */
-  private getProductPrice(productName: string): number {
-    const priceMap: Record<string, number> = {
-      Pizza: 4500,
-      Burger: 3200,
-      Salad: 2800,
-      Coffee: 1400,
-      Soda: 900,
-    };
-    return priceMap[productName] || 1000;
   }
 }

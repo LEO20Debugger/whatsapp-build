@@ -11,7 +11,6 @@ import {
   UnauthorizedException,
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { WhatsAppWebhookDto } from "../dto/whatsapp-webhook.dto";
 import { WebhookVerificationDto } from "../dto/webhook-verification.dto";
 import { IncomingMessage } from "../interfaces/whatsapp.interface";
 import { MessageProcessingService } from "../services/message-processing.service";
@@ -64,24 +63,33 @@ export class WhatsAppWebhookController {
         JSON.stringify(payload),
       );
 
-      // Handle Twilio webhook format
-      if (payload.From && payload.Body) {
-        // This is a Twilio webhook
-        const twilioMessage = {
+      // Handle Twilio messages (text or media)
+      if (payload.From && (payload.Body || (payload.NumMedia && parseInt(payload.NumMedia) > 0))) {
+        const type =
+          payload.NumMedia && parseInt(payload.NumMedia) > 0
+            ? payload.MediaContentType0.split("/")[0] // image, audio, video, etc.
+            : "text";
+
+        const twilioMessage: IncomingMessage = {
           id: payload.MessageSid || `twilio_${Date.now()}`,
           from: payload.From.replace("whatsapp:", ""),
-          text: {
-            body: payload.Body,
-          },
-          type: "text",
+          text: { body: payload.Body || "" },
+          type,
+          mediaUrls: [],
           timestamp: Math.floor(Date.now() / 1000),
         };
+
+        if (payload.NumMedia && parseInt(payload.NumMedia) > 0) {
+          for (let i = 0; i < parseInt(payload.NumMedia); i++) {
+            twilioMessage.mediaUrls.push(payload[`MediaUrl${i}`]);
+          }
+        }
 
         await this.processIncomingMessage(twilioMessage);
         return { status: "success" };
       }
 
-      // Handle Meta WhatsApp API format (original code)
+      // Handle Meta WhatsApp API format
       if (!payload.object || payload.object !== "whatsapp_business_account") {
         throw new BadRequestException("Invalid webhook object type");
       }
@@ -90,7 +98,6 @@ export class WhatsAppWebhookController {
         throw new BadRequestException("Invalid webhook entry structure");
       }
 
-      // Process each entry in the webhook payload
       for (const entry of payload.entry) {
         if (!entry.changes || !Array.isArray(entry.changes)) {
           this.logger.warn(`Invalid changes structure in entry ${entry.id}`);
@@ -110,7 +117,6 @@ export class WhatsAppWebhookController {
             continue;
           }
 
-          // Process each message
           for (const message of value.messages) {
             await this.processIncomingMessage(message);
           }
@@ -141,7 +147,6 @@ export class WhatsAppWebhookController {
     try {
       this.logger.log(`Processing message ${message.id} from ${message.from}`);
 
-      // Validate message structure
       if (!message.from || !message.id) {
         this.logger.warn(
           `Invalid message structure: ${JSON.stringify(message)}`,
@@ -149,11 +154,8 @@ export class WhatsAppWebhookController {
         return;
       }
 
-      // Process message through the message processing pipeline
-      const result =
-        await this.messageProcessingService.processMessage(message);
+      const result = await this.messageProcessingService.processMessage(message);
 
-      // Log processing result for monitoring
       if (result.success) {
         this.logger.log(
           `Message ${message.id} processed successfully in ${result.processingTime}ms`,
@@ -169,7 +171,6 @@ export class WhatsAppWebhookController {
       }
     } catch (error) {
       this.logger.error(`Error processing message ${message.id}:`, error);
-      // Don't throw here to avoid failing the entire webhook
     }
   }
 }

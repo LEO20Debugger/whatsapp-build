@@ -6,6 +6,9 @@ export interface IncomingMessage {
     body: string;
   };
   type?: string;
+
+  // for media messages (images, audio, video, documents)
+  mediaUrls?: string[];
 }
 
 export interface WhatsAppContact {

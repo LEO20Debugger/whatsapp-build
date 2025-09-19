@@ -222,13 +222,13 @@ export class MessageProcessingService {
       case MessageType.IMAGE:
         return {
           message:
-            "I received your image, but I can only process text messages right now. Please describe what you'd like to order.",
+            "I received your image, but I can only process text messages right now. Please type what you'd like to order.",
         };
 
       case MessageType.DOCUMENT:
         return {
           message:
-            "I received your document, but I can only process text messages right now. Please tell me what you'd like to order.",
+            "I received your document, but I can only process text messages right now. Please type what you'd like to order.",
         };
 
       case MessageType.AUDIO:
