@@ -26,33 +26,33 @@
   - Set up transaction management utilities
   - _Requirements: 6.1, 6.2, 7.3_
 
-- [ ] 3. Create core data models and repositories
-- [ ] 3.1 Implement Customer repository
+- [x] 3. Create core data models and repositories
+- [x] 3.1 Implement Customer repository
   - Create customer CRUD operations using Drizzle
   - Implement customer lookup by phone number
   - Write unit tests for customer repository methods
   - _Requirements: 1.5, 6.5_
 
-- [ ] 3.2 Implement Product repository
+- [x] 3.2 Implement Product repository
   - Create product CRUD operations with availability filtering
   - Implement product search functionality
   - Write unit tests for product repository methods
   - _Requirements: 1.1, 1.4, 5.1, 5.3_
 
-- [ ] 3.3 Implement Order and OrderItem repositories
+- [x] 3.3 Implement Order and OrderItem repositories
   - Create order creation and status update operations
   - Implement order item management with quantity calculations
   - Write unit tests for order repository methods
   - _Requirements: 1.5, 3.2, 6.1, 6.3_
 
-- [ ] 3.4 Implement Payment repository
+- [x] 3.4 Implement Payment repository
   - Create payment record creation and status tracking
   - Implement payment verification lookup methods
   - Write unit tests for payment repository methods
   - _Requirements: 3.1, 3.2, 6.2_
 
-- [ ] 4. Set up Redis session management
-- [ ] 4.1 Create Redis connection service
+- [-] 4. Set up Redis session management
+- [-] 4.1 Create Redis connection service
   - Configure Redis connection with retry logic
   - Implement Redis health check functionality
   - Set up connection error handling and logging

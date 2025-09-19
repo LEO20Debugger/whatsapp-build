@@ -15,7 +15,7 @@ export class AppController {
     return {
       status: 'ok',
       timestamp: new Date().toISOString(),
-      service: 'whatsapp-order-bot',
+      service: 'whatsapp-chat-bot',
     };
   }
 }
