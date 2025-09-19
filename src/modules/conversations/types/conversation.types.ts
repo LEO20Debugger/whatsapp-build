@@ -1,0 +1,39 @@
+export enum ConversationState {
+  GREETING = 'greeting',
+  BROWSING_PRODUCTS = 'browsing_products',
+  ADDING_TO_CART = 'adding_to_cart',
+  REVIEWING_ORDER = 'reviewing_order',
+  AWAITING_PAYMENT = 'awaiting_payment',
+  PAYMENT_CONFIRMATION = 'payment_confirmation',
+  ORDER_COMPLETE = 'order_complete'
+}
+
+export interface OrderItem {
+  productId: string;
+  quantity: number;
+  name: string;
+  price: number;
+}
+
+export interface CurrentOrder {
+  items: OrderItem[];
+  totalAmount?: number;
+}
+
+export interface ConversationSession {
+  phoneNumber: string;
+  currentState: ConversationState;
+  currentOrder?: CurrentOrder;
+  lastActivity: Date;
+  context: Record<string, any>;
+}
+
+export interface SessionStorageOptions {
+  ttl?: number; // Time to live in seconds
+}
+
+export interface BotResponse {
+  message: string;
+  nextState?: ConversationState;
+  context?: Record<string, any>;
+}
