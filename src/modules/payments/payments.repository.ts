@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { eq, desc, asc, and, gte, lte, isNull, isNotNull } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import { payments, orders } from '../../database/schema';
-import { Payment, NewPayment, PaymentStatus, PaymentMethod } from '../../database/types';
+import { Payment, NewPayment, UpdatePayment, PaymentStatus, PaymentMethod } from '../../database/types';
 
 export interface PaymentSearchOptions {
   limit?: number;
@@ -48,14 +48,14 @@ export class PaymentsRepository {
     externalTransactionId?: string
   ): Promise<Payment> {
     try {
-      const paymentData: NewPayment = {
+      const paymentData = {
         orderId,
         amount: amount.toString(),
         paymentMethod,
-        paymentReference,
-        externalTransactionId,
-        status: 'pending',
-      };
+        status: 'pending' as const,
+        ...(paymentReference && { paymentReference }),
+        ...(externalTransactionId && { externalTransactionId }),
+      } as NewPayment;
 
       const payment = await this.create(paymentData);
       this.logger.log(`Created payment for order ${orderId} with amount ${amount}`);
@@ -276,7 +276,7 @@ export class PaymentsRepository {
         .set({
           status: 'failed' as PaymentStatus,
           failureReason,
-        })
+        } as UpdatePayment)
         .where(eq(payments.id, id))
         .returning();
 
@@ -429,15 +429,13 @@ export class PaymentsRepository {
       const sortColumn = payments[sortBy];
       const orderByClause = sortOrder === 'asc' ? asc(sortColumn) : desc(sortColumn);
 
-      let query = this.databaseService.db
+      const baseQuery = this.databaseService.db
         .select()
         .from(payments);
 
-      if (whereConditions.length > 0) {
-        query = query.where(and(...whereConditions));
-      }
-
-      const paymentList = await query
+      const paymentList = await (whereConditions.length > 0 
+        ? baseQuery.where(and(...whereConditions))
+        : baseQuery)
         .orderBy(orderByClause)
         .limit(limit)
         .offset(offset);
@@ -508,15 +506,13 @@ export class PaymentsRepository {
         whereConditions.push(lte(payments.amount, maxAmount.toString()));
       }
 
-      let query = this.databaseService.db
+      const baseQuery = this.databaseService.db
         .select()
         .from(payments);
 
-      if (whereConditions.length > 0) {
-        query = query.where(and(...whereConditions));
-      }
-
-      const result = await query;
+      const result = await (whereConditions.length > 0 
+        ? baseQuery.where(and(...whereConditions))
+        : baseQuery);
       return result.length;
     } catch (error) {
       this.logger.error(`Failed to count payments: ${error.message}`);

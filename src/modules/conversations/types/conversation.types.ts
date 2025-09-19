@@ -8,6 +8,10 @@ export enum ConversationState {
   ORDER_COMPLETE = 'order_complete'
 }
 
+// Re-export types from other modules for convenience
+export * from './state-machine.types';
+export * from './input-parser.types';
+
 export interface OrderItem {
   productId: string;
   quantity: number;

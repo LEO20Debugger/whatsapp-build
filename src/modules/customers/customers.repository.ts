@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { eq, like, desc, asc } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import { customers } from '../../database/schema';
-import { Customer, NewCustomer } from '../../database/types';
+import { Customer, NewCustomer, UpdateCustomer } from '../../database/types';
 
 export interface CustomerSearchOptions {
   limit?: number;
@@ -106,7 +106,7 @@ export class CustomersRepository {
     }
   }
 
-  async update(id: string, updateData: Partial<NewCustomer>): Promise<Customer> {
+  async update(id: string, updateData: UpdateCustomer): Promise<Customer> {
     try {
       const [customer] = await this.databaseService.db
         .update(customers)

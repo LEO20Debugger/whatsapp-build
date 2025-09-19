@@ -7,6 +7,7 @@ import { AppService } from './app.service';
 import { DatabaseModule } from './database/database.module';
 import { HealthModule } from './common/health/health.module';
 import { RedisModule } from './common/redis/redis.module';
+import { QueueModule } from './common/queue/queue.module';
 import { configValidation } from './config/config.validation';
 
 @Module({
@@ -32,6 +33,8 @@ import { configValidation } from './config/config.validation';
     ] : []),
     DatabaseModule,
     RedisModule,
+    // Only import QueueModule if Redis is configured
+    ...(process.env.REDIS_HOST ? [QueueModule] : []),
     HealthModule,
   ],
   controllers: [AppController],

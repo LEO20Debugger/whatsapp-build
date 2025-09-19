@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { eq, like, desc, asc, and, gte, lte, ilike } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import { products } from '../../database/schema';
-import { Product, NewProduct } from '../../database/types';
+import { Product, NewProduct, UpdateProduct } from '../../database/types';
 
 export interface ProductSearchOptions {
   limit?: number;
@@ -243,7 +243,7 @@ export class ProductsRepository {
     try {
       const [product] = await this.databaseService.db
         .update(products)
-        .set({ stockQuantity: quantity })
+        .set({ stockQuantity: quantity } as UpdateProduct)
         .where(eq(products.id, id))
         .returning();
 
@@ -274,7 +274,7 @@ export class ProductsRepository {
 
       const [product] = await this.databaseService.db
         .update(products)
-        .set({ stockQuantity: newQuantity })
+        .set({ stockQuantity: newQuantity } as UpdateProduct)
         .where(eq(products.id, id))
         .returning();
 
@@ -297,7 +297,7 @@ export class ProductsRepository {
 
       const [product] = await this.databaseService.db
         .update(products)
-        .set({ stockQuantity: newQuantity })
+        .set({ stockQuantity: newQuantity } as UpdateProduct)
         .where(eq(products.id, id))
         .returning();
 
@@ -313,7 +313,7 @@ export class ProductsRepository {
     try {
       const [product] = await this.databaseService.db
         .update(products)
-        .set({ available })
+        .set({ available } as UpdateProduct)
         .where(eq(products.id, id))
         .returning();
 
@@ -392,15 +392,13 @@ export class ProductsRepository {
       const sortColumn = products[sortBy];
       const orderByClause = sortOrder === 'asc' ? asc(sortColumn) : desc(sortColumn);
 
-      let query = this.databaseService.db
+      const baseQuery = this.databaseService.db
         .select()
         .from(products);
 
-      if (whereConditions.length > 0) {
-        query = query.where(and(...whereConditions));
-      }
-
-      const productList = await query
+      const productList = await (whereConditions.length > 0 
+        ? baseQuery.where(and(...whereConditions))
+        : baseQuery)
         .orderBy(orderByClause)
         .limit(limit)
         .offset(offset);
@@ -463,15 +461,13 @@ export class ProductsRepository {
         whereConditions.push(gte(products.stockQuantity, 1));
       }
 
-      let query = this.databaseService.db
+      const baseQuery = this.databaseService.db
         .select()
         .from(products);
 
-      if (whereConditions.length > 0) {
-        query = query.where(and(...whereConditions));
-      }
-
-      const result = await query;
+      const result = await (whereConditions.length > 0 
+        ? baseQuery.where(and(...whereConditions))
+        : baseQuery);
       return result.length;
     } catch (error) {
       this.logger.error(`Failed to count products: ${error.message}`);

@@ -27,6 +27,15 @@ export type NewPayment = InferInsertModel<typeof payments>;
 export type NewConversationSession = InferInsertModel<typeof conversationSessions>;
 export type NewMessageLog = InferInsertModel<typeof messageLogs>;
 
+// Update types (for updating existing records)
+export type UpdateCustomer = Partial<Omit<Customer, 'id' | 'createdAt'>>;
+export type UpdateProduct = Partial<Omit<Product, 'id' | 'createdAt'>>;
+export type UpdateOrder = Partial<Omit<Order, 'id' | 'createdAt'>>;
+export type UpdateOrderItem = Partial<Omit<OrderItem, 'id'>>;
+export type UpdatePayment = Partial<Omit<Payment, 'id' | 'createdAt'>>;
+export type UpdateConversationSession = Partial<Omit<ConversationSession, 'id' | 'createdAt'>>;
+export type UpdateMessageLog = Partial<Omit<MessageLog, 'id' | 'createdAt'>>;
+
 // Enum types
 export type OrderStatus = 'pending' | 'confirmed' | 'paid' | 'processing' | 'completed' | 'cancelled';
 export type PaymentStatus = 'pending' | 'verified' | 'failed' | 'refunded';

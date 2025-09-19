@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { eq, desc, asc, and, gte, lte, inArray } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import { orders, orderItems, customers, products } from '../../database/schema';
-import { Order, NewOrder, OrderStatus, OrderWithItems } from '../../database/types';
+import { Order, NewOrder, UpdateOrder, OrderStatus, OrderWithItems } from '../../database/types';
 
 export interface OrderSearchOptions {
   limit?: number;
@@ -239,7 +239,7 @@ export class OrdersRepository {
     try {
       const [order] = await this.databaseService.db
         .update(orders)
-        .set({ paymentReference })
+        .set({ paymentReference } as UpdateOrder)
         .where(eq(orders.id, id))
         .returning();
 
@@ -346,15 +346,13 @@ export class OrdersRepository {
       const sortColumn = orders[sortBy];
       const orderByClause = sortOrder === 'asc' ? asc(sortColumn) : desc(sortColumn);
 
-      let query = this.databaseService.db
+      const baseQuery = this.databaseService.db
         .select()
         .from(orders);
 
-      if (whereConditions.length > 0) {
-        query = query.where(and(...whereConditions));
-      }
-
-      const orderList = await query
+      const orderList = await (whereConditions.length > 0 
+        ? baseQuery.where(and(...whereConditions))
+        : baseQuery)
         .orderBy(orderByClause)
         .limit(limit)
         .offset(offset);
@@ -409,15 +407,13 @@ export class OrdersRepository {
         whereConditions.push(lte(orders.totalAmount, maxAmount.toString()));
       }
 
-      let query = this.databaseService.db
+      const baseQuery = this.databaseService.db
         .select()
         .from(orders);
 
-      if (whereConditions.length > 0) {
-        query = query.where(and(...whereConditions));
-      }
-
-      const result = await query;
+      const result = await (whereConditions.length > 0 
+        ? baseQuery.where(and(...whereConditions))
+        : baseQuery);
       return result.length;
     } catch (error) {
       this.logger.error(`Failed to count orders: ${error.message}`);
@@ -467,7 +463,7 @@ export class OrdersRepository {
           subtotalAmount: totals.subtotal.toString(),
           taxAmount: totals.tax.toString(),
           totalAmount: totals.total.toString(),
-        })
+        } as UpdateOrder)
         .where(eq(orders.id, orderId))
         .returning();
 
