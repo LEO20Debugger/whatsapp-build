@@ -75,3 +75,150 @@ export type OrderItemWithProduct = OrderItem & {
 export type CustomerWithOrders = Customer & {
   orders: Order[];
 };
+
+// Conversation-specific types for repositories
+export type CreateConversationSession = Omit<NewConversationSession, "id" | "createdAt" | "updatedAt">;
+export type CreateMessageLog = Omit<NewMessageLog, "id" | "createdAt">;
+
+// Enhanced conversation session with computed fields for analytics
+export type ConversationSessionWithMetrics = ConversationSession & {
+  duration?: number;
+  messageCount?: number;
+  stateTransitions?: StateTransition[];
+};
+
+export type MessageLogWithContext = MessageLog & {
+  conversationState?: ConversationState;
+  sessionContext?: Record<string, any>;
+};
+
+// State transition tracking
+export interface StateTransition {
+  fromState: ConversationState;
+  toState: ConversationState;
+  timestamp: Date;
+  trigger?: string;
+}
+
+// Analytics types
+export interface SessionMetrics {
+  totalSessions: number;
+  activeSessions: number;
+  completedOrders: number;
+  averageDuration: number;
+  conversionRate: number;
+  sessionsByState: Record<ConversationState, number>;
+}
+
+export interface MessageMetrics {
+  totalMessages: number;
+  inboundMessages: number;
+  outboundMessages: number;
+  averageResponseTime: number;
+  errorRate: number;
+}
+
+export interface ProductPopularity {
+  productId: string;
+  productName: string;
+  viewCount: number;
+  addToCartCount: number;
+  purchaseCount: number;
+  conversionRate: number;
+}
+
+export interface ConversionFunnel {
+  stage: ConversationState;
+  count: number;
+  conversionRate: number;
+}
+
+export interface CustomerJourney {
+  phoneNumber: string;
+  sessions: ConversationSession[];
+  totalMessages: number;
+  averageSessionDuration: number;
+  conversionRate: number;
+  lastActivity: Date;
+}
+
+export interface DashboardMetrics {
+  sessionMetrics: SessionMetrics;
+  messageMetrics: MessageMetrics;
+  popularProducts: ProductPopularity[];
+  conversionFunnel: ConversionFunnel[];
+}
+
+export interface ProductPerformance {
+  productId: string;
+  productName: string;
+  totalViews: number;
+  totalAddedToCart: number;
+  totalPurchased: number;
+  conversionRate: number;
+  averageTimeToDecision: number;
+}
+
+export interface ConversionAnalysis {
+  overallConversionRate: number;
+  conversionByState: Record<ConversationState, number>;
+  dropOffPoints: DropOffPoint[];
+  averageTimeToConversion: number;
+}
+
+export interface DropOffPoint {
+  state: ConversationState;
+  dropOffRate: number;
+  commonReasons: string[];
+  suggestedImprovements: string[];
+}
+
+// Repository interfaces
+export interface ConversationSessionRepository {
+  create(session: CreateConversationSession): Promise<ConversationSession>;
+  findByPhoneNumber(phoneNumber: string): Promise<ConversationSession | null>;
+  findById(id: string): Promise<ConversationSession | null>;
+  update(id: string, updates: UpdateConversationSession): Promise<ConversationSession>;
+  delete(id: string): Promise<boolean>;
+  
+  // Analytics queries
+  findActiveSessions(): Promise<ConversationSession[]>;
+  findByDateRange(startDate: Date, endDate: Date): Promise<ConversationSession[]>;
+  getSessionsByState(state: ConversationState): Promise<ConversationSession[]>;
+  getSessionMetrics(timeframe: 'day' | 'week' | 'month'): Promise<SessionMetrics>;
+}
+
+export interface MessageLogRepository {
+  logMessage(message: CreateMessageLog): Promise<MessageLog>;
+  getConversationHistory(phoneNumber: string, limit?: number): Promise<MessageLog[]>;
+  getMessagesByDateRange(startDate: Date, endDate: Date): Promise<MessageLog[]>;
+  
+  // Analytics queries
+  getMessageMetrics(timeframe: 'day' | 'week' | 'month'): Promise<MessageMetrics>;
+  getPopularProducts(): Promise<ProductPopularity[]>;
+  getConversionFunnelData(): Promise<ConversionFunnel[]>;
+}
+
+export interface HybridSessionManager {
+  // Session Management
+  getSession(phoneNumber: string): Promise<ConversationSession | null>;
+  createSession(phoneNumber: string, initialState?: ConversationState): Promise<ConversationSession>;
+  updateSession(session: ConversationSession): Promise<boolean>;
+  deleteSession(phoneNumber: string): Promise<boolean>;
+  
+  // Recovery Operations
+  restoreSessionFromDatabase(phoneNumber: string): Promise<ConversationSession | null>;
+  syncActiveSessionsToDatabase(): Promise<number>;
+  
+  // Analytics Support
+  getSessionHistory(phoneNumber: string, limit?: number): Promise<ConversationSession[]>;
+  getActiveSessionsCount(): Promise<number>;
+}
+
+export interface ConversationAnalyticsService {
+  getDashboardMetrics(): Promise<DashboardMetrics>;
+  getCustomerJourneyAnalysis(phoneNumber: string): Promise<CustomerJourney>;
+  getProductPerformanceReport(): Promise<ProductPerformance[]>;
+  getConversionRateAnalysis(): Promise<ConversionAnalysis>;
+  getDropOffAnalysis(): Promise<DropOffPoint[]>;
+}

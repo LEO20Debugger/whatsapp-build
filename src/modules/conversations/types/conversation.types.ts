@@ -1,7 +1,10 @@
 export enum ConversationState {
   GREETING = "greeting",
+  COLLECTING_NAME = "collecting_name",
+  MAIN_MENU = "main_menu",
   BROWSING_PRODUCTS = "browsing_products",
   ADDING_TO_CART = "adding_to_cart",
+  COLLECTING_QUANTITY = "collecting_quantity",
   REVIEWING_ORDER = "reviewing_order",
   AWAITING_PAYMENT = "awaiting_payment",
   PAYMENT_CONFIRMATION = "payment_confirmation",

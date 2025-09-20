@@ -1,6 +1,7 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { ConversationSessionService } from "./conversation-session.service";
 import { RedisService } from "../../../common/redis/redis.service";
+import { HybridSessionManager } from "./hybrid-session-manager.service";
 import {
   ConversationState,
   ConversationSession,
@@ -9,6 +10,7 @@ import {
 describe("ConversationSessionService", () => {
   let service: ConversationSessionService;
   let redisService: jest.Mocked<RedisService>;
+  let hybridSessionManager: jest.Mocked<HybridSessionManager>;
 
   const mockPhoneNumber = "+1234567890";
   const mockSession: ConversationSession = {
@@ -29,12 +31,27 @@ describe("ConversationSessionService", () => {
       keys: jest.fn(),
     };
 
+    const mockHybridSessionManager = {
+      getSession: jest.fn(),
+      createSession: jest.fn(),
+      updateSession: jest.fn(),
+      deleteSession: jest.fn(),
+      restoreSessionFromDatabase: jest.fn(),
+      syncActiveSessionsToDatabase: jest.fn(),
+      getSessionHistory: jest.fn(),
+      getActiveSessionsCount: jest.fn(),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ConversationSessionService,
         {
           provide: RedisService,
           useValue: mockRedisService,
+        },
+        {
+          provide: HybridSessionManager,
+          useValue: mockHybridSessionManager,
         },
       ],
     }).compile();
@@ -45,6 +62,9 @@ describe("ConversationSessionService", () => {
     redisService = module.get<RedisService>(
       RedisService,
     ) as jest.Mocked<RedisService>;
+    hybridSessionManager = module.get<HybridSessionManager>(
+      HybridSessionManager,
+    ) as jest.Mocked<HybridSessionManager>;
   });
 
   afterEach(() => {
@@ -52,39 +72,25 @@ describe("ConversationSessionService", () => {
   });
 
   describe("getSession", () => {
-    it("should return session when found in Redis", async () => {
-      const sessionData = JSON.stringify(mockSession);
-      redisService.get.mockResolvedValue(sessionData);
+    it("should return session when found via hybrid manager", async () => {
+      hybridSessionManager.getSession.mockResolvedValue(mockSession);
 
       const result = await service.getSession(mockPhoneNumber);
 
-      expect(redisService.get).toHaveBeenCalledWith(
-        "conversation:session:+1234567890",
-      );
-      expect(result).toEqual({
-        ...mockSession,
-        lastActivity: new Date("2023-01-01T12:00:00Z"),
-      });
+      expect(hybridSessionManager.getSession).toHaveBeenCalledWith(mockPhoneNumber);
+      expect(result).toEqual(mockSession);
     });
 
     it("should return null when session not found", async () => {
-      redisService.get.mockResolvedValue(null);
+      hybridSessionManager.getSession.mockResolvedValue(null);
 
       const result = await service.getSession(mockPhoneNumber);
 
       expect(result).toBeNull();
     });
 
-    it("should return null when Redis operation fails", async () => {
-      redisService.get.mockRejectedValue(new Error("Redis error"));
-
-      const result = await service.getSession(mockPhoneNumber);
-
-      expect(result).toBeNull();
-    });
-
-    it("should handle invalid JSON data gracefully", async () => {
-      redisService.get.mockResolvedValue("invalid json");
+    it("should return null when hybrid manager operation fails", async () => {
+      hybridSessionManager.getSession.mockRejectedValue(new Error("Hybrid manager error"));
 
       const result = await service.getSession(mockPhoneNumber);
 
@@ -94,41 +100,29 @@ describe("ConversationSessionService", () => {
 
   describe("setSession", () => {
     it("should save session successfully", async () => {
-      redisService.set.mockResolvedValue(true);
+      hybridSessionManager.updateSession.mockResolvedValue(true);
 
       const result = await service.setSession(mockSession);
 
-      expect(redisService.set).toHaveBeenCalledWith(
-        "conversation:session:+1234567890",
-        expect.stringContaining(mockPhoneNumber),
-        3600,
+      expect(hybridSessionManager.updateSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          phoneNumber: mockPhoneNumber,
+          lastActivity: expect.any(Date),
+        })
       );
       expect(result).toBe(true);
     });
 
-    it("should use custom TTL when provided", async () => {
-      redisService.set.mockResolvedValue(true);
-
-      const result = await service.setSession(mockSession, { ttl: 7200 });
-
-      expect(redisService.set).toHaveBeenCalledWith(
-        "conversation:session:+1234567890",
-        expect.any(String),
-        7200,
-      );
-      expect(result).toBe(true);
-    });
-
-    it("should return false when Redis operation fails", async () => {
-      redisService.set.mockResolvedValue(false);
+    it("should return false when hybrid manager operation fails", async () => {
+      hybridSessionManager.updateSession.mockResolvedValue(false);
 
       const result = await service.setSession(mockSession);
 
       expect(result).toBe(false);
     });
 
-    it("should handle Redis errors gracefully", async () => {
-      redisService.set.mockRejectedValue(new Error("Redis error"));
+    it("should handle hybrid manager errors gracefully", async () => {
+      hybridSessionManager.updateSession.mockRejectedValue(new Error("Hybrid manager error"));
 
       const result = await service.setSession(mockSession);
 
@@ -138,32 +132,46 @@ describe("ConversationSessionService", () => {
 
   describe("createSession", () => {
     it("should create new session with default state", async () => {
-      redisService.set.mockResolvedValue(true);
-
-      const result = await service.createSession(mockPhoneNumber);
-
-      expect(redisService.set).toHaveBeenCalled();
-      expect(result).toMatchObject({
+      const expectedSession = {
         phoneNumber: mockPhoneNumber,
         currentState: ConversationState.GREETING,
         context: {},
-      });
-      expect(result?.lastActivity).toBeInstanceOf(Date);
+        lastActivity: expect.any(Date),
+      };
+      hybridSessionManager.createSession.mockResolvedValue(expectedSession);
+
+      const result = await service.createSession(mockPhoneNumber);
+
+      expect(hybridSessionManager.createSession).toHaveBeenCalledWith(
+        mockPhoneNumber,
+        ConversationState.GREETING
+      );
+      expect(result).toEqual(expectedSession);
     });
 
     it("should create session with custom initial state", async () => {
-      redisService.set.mockResolvedValue(true);
+      const expectedSession = {
+        phoneNumber: mockPhoneNumber,
+        currentState: ConversationState.BROWSING_PRODUCTS,
+        context: {},
+        lastActivity: expect.any(Date),
+      };
+      hybridSessionManager.createSession.mockResolvedValue(expectedSession);
 
       const result = await service.createSession(
         mockPhoneNumber,
         ConversationState.BROWSING_PRODUCTS,
       );
 
+      expect(hybridSessionManager.createSession).toHaveBeenCalledWith(
+        mockPhoneNumber,
+        ConversationState.BROWSING_PRODUCTS
+      );
       expect(result?.currentState).toBe(ConversationState.BROWSING_PRODUCTS);
     });
 
     it("should return null when session creation fails", async () => {
-      redisService.set.mockResolvedValue(false);
+      hybridSessionManager.createSession.mockResolvedValue(null);
 
       const result = await service.createSession(mockPhoneNumber);
 
@@ -173,9 +181,8 @@ describe("ConversationSessionService", () => {
 
   describe("updateState", () => {
     it("should update session state successfully", async () => {
-      const sessionData = JSON.stringify(mockSession);
-      redisService.get.mockResolvedValue(sessionData);
-      redisService.set.mockResolvedValue(true);
+      hybridSessionManager.getSession.mockResolvedValue(mockSession);
+      hybridSessionManager.updateSession.mockResolvedValue(true);
 
       const result = await service.updateState(
         mockPhoneNumber,
@@ -183,13 +190,19 @@ describe("ConversationSessionService", () => {
         { newKey: "newValue" },
       );
 
-      expect(redisService.get).toHaveBeenCalled();
-      expect(redisService.set).toHaveBeenCalled();
+      expect(hybridSessionManager.getSession).toHaveBeenCalledWith(mockPhoneNumber);
+      expect(hybridSessionManager.updateSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          phoneNumber: mockPhoneNumber,
+          currentState: ConversationState.BROWSING_PRODUCTS,
+          context: expect.objectContaining({ newKey: "newValue" }),
+        })
+      );
       expect(result).toBe(true);
     });
 
     it("should return false when session not found", async () => {
-      redisService.get.mockResolvedValue(null);
+      hybridSessionManager.getSession.mockResolvedValue(null);
 
       const result = await service.updateState(
         mockPhoneNumber,
@@ -199,8 +212,8 @@ describe("ConversationSessionService", () => {
       expect(result).toBe(false);
     });
 
-    it("should handle Redis errors gracefully", async () => {
-      redisService.get.mockRejectedValue(new Error("Redis error"));
+    it("should handle hybrid manager errors gracefully", async () => {
+      hybridSessionManager.getSession.mockRejectedValue(new Error("Hybrid manager error"));
 
       const result = await service.updateState(
         mockPhoneNumber,

@@ -13,7 +13,9 @@ import { StateTrigger, ContextKey } from "../types/state-machine.types";
 import { StateMachineService } from "./state-machine.service";
 import { InputParserService } from "./input-parser.service";
 import { ConversationSessionService } from "./conversation-session.service";
-import { ProductsRepository } from "src/modules/products/products.repository";
+import { OrderFlowService } from "./order-flow.service";
+import { ProductsRepository } from "../../products/products.repository";
+import { CustomersRepository } from "../../customers/customers.repository";
 
 @Injectable()
 export class ConversationFlowService {
@@ -23,7 +25,9 @@ export class ConversationFlowService {
     private readonly stateMachineService: StateMachineService,
     private readonly inputParserService: InputParserService,
     private readonly sessionService: ConversationSessionService,
+    private readonly orderFlowService: OrderFlowService,
     private readonly productsRepository: ProductsRepository,
+    private readonly customersRepository: CustomersRepository,
   ) {}
 
   async processMessage(
@@ -88,12 +92,26 @@ export class ConversationFlowService {
     session: ConversationSession,
     parsedInput: ParsedInput,
   ): Promise<BotResponse> {
+    // Check for restart commands (hello, hi) in any state
+    const userInput = parsedInput.originalText.trim().toLowerCase();
+    if (userInput === 'hello' || userInput === 'hi' || userInput === 'hey') {
+      // Clear session context and restart
+      session.context = {};
+      
+      // Call greeting state to show menu immediately
+      return await this.handleGreetingState(session, parsedInput);
+    }
+
     const stateHandlers = {
       [ConversationState.GREETING]: this.handleGreetingState.bind(this),
+      [ConversationState.COLLECTING_NAME]: this.handleCollectingNameState.bind(this),
+      [ConversationState.MAIN_MENU]: this.handleMainMenuState.bind(this),
       [ConversationState.BROWSING_PRODUCTS]:
         this.handleBrowsingProductsState.bind(this),
       [ConversationState.ADDING_TO_CART]:
         this.handleAddingToCartState.bind(this),
+      [ConversationState.COLLECTING_QUANTITY]:
+        this.handleCollectingQuantityState.bind(this),
       [ConversationState.REVIEWING_ORDER]:
         this.handleReviewingOrderState.bind(this),
       [ConversationState.AWAITING_PAYMENT]:
@@ -113,260 +131,581 @@ export class ConversationFlowService {
     };
   }
 
-  private handleGreetingState(
+  private async handleGreetingState(
     session: ConversationSession,
     parsedInput: ParsedInput,
-  ): BotResponse {
-    const { intent, trigger } = parsedInput;
+  ): Promise<BotResponse> {
+    // Always give the same friendly greeting with Leo introduction and show menu immediately
+    try {
+      // Get available products from database
+      const products = await this.productsRepository.findAvailableProducts();
+      
+      if (!products || products.length === 0) {
+        return {
+          message: `Hi there! 👋 My name is Leo.. Welcome to Chicken Republic Restaurant! 🍗\n\nI'm here to help you order some delicious food today!\n\nSorry, we don't have any products available right now. Please try again later.`,
+          nextState: ConversationState.BROWSING_PRODUCTS,
+        };
+      }
 
-    if (intent === UserIntent.GET_HELP) {
+      // Group products by category
+      const productsByCategory = products.reduce((acc, product) => {
+        const category = product.category || 'Other';
+        if (!acc[category]) acc[category] = [];
+        acc[category].push(product);
+        return acc;
+      }, {} as Record<string, any[]>);
+
+      // Build greeting + menu message
+      let fullMessage = `Hi there! 👋 My name is Leo.. Welcome to Chicken Republic Restaurant! 🍗\n\nI'm here to help you order some delicious food today!\n\n`;
+      fullMessage += `Here's our delicious menu! 🍽️\n\n`;
+      
+      let globalIndex = 1;
+      
+      Object.entries(productsByCategory).forEach(([category, categoryProducts]) => {
+        fullMessage += `**${category.toUpperCase()}** 🍴\n`;
+        categoryProducts.forEach((product) => {
+          const price = parseFloat(product.price).toLocaleString('en-NG', {
+            style: 'currency',
+            currency: 'NGN',
+            minimumFractionDigits: 0,
+          });
+          fullMessage += `${globalIndex}. ${product.name} - ${price}\n`;
+          if (product.description) {
+            fullMessage += `   ${product.description}\n`;
+          }
+          globalIndex++;
+        });
+        fullMessage += '\n';
+      });
+
+      fullMessage += `💡 **What would you like to order?**\n\n`;
+      fullMessage += `• Type a number (1-${globalIndex-1}) to select a product\n`;
+      fullMessage += `• Type the product name to add to cart\n`;
+      fullMessage += `• Type "cart" to view your cart\n`;
+      fullMessage += `• Type "no" if you're just browsing\n\n`;
+      fullMessage += `Select 1 or 2 to add the product to cart:`;
+
       return {
-        message: `🤖 **HELP MENU**\n\n1️⃣ Browse products\n2️⃣ Place an order\n3️⃣ Check order status\n4️⃣ Start over\n5️⃣ Contact support\n0️⃣ Go back\n\nType a number (0-5):`,
+        message: fullMessage,
+        nextState: ConversationState.ADDING_TO_CART,
+        context: {
+          ...session.context,
+          [ContextKey.SELECTED_PRODUCTS]: products,
+        },
       };
-    }
-
-    if (trigger === StateTrigger.VIEW_PRODUCTS) {
+    } catch (error) {
+      this.logger.error(`Error in greeting state: ${error.message}`);
       return {
-        message: `Great! Let me show you our available products...\nPlease wait while I fetch our current menu...`,
+        message: `Hi there! 👋 My name is Leo.. Welcome to Chicken Republic Restaurant! 🍗\n\nI'm here to help you order some delicious food today!\n\nSorry, I'm having trouble loading our menu right now. Please try again later.`,
         nextState: ConversationState.BROWSING_PRODUCTS,
       };
     }
+  }
 
-    if (
-      trigger === StateTrigger.START_CONVERSATION ||
-      intent === UserIntent.GREETING
-    ) {
+  private async handleCollectingNameState(
+    session: ConversationSession,
+    parsedInput: ParsedInput,
+  ): Promise<BotResponse> {
+    const userMessage = parsedInput.originalText.trim();
+
+    // Validate name input
+    if (userMessage.length < 2 || userMessage.length > 50) {
       return {
-        message: `Hello! 👋 Welcome to our WhatsApp ordering service!\n\n📱 **MAIN MENU**\n1️⃣ Browse products\n2️⃣ Place an order\n3️⃣ Make payment\n4️⃣ Get help\n0️⃣ Exit\n\nType the number of your choice:`,
+        message: `Please enter a valid name between 2-50 characters.\n\n💭 For example: "John" or "Sarah"\n\nWhat's your name?`,
       };
     }
 
-    return {
-      message: `Hi there! I'm here to help you place an order.\n\nType a number from the main menu or "help" for assistance.`,
-    };
+    // Check if it looks like a name (basic validation)
+    if (!/^[a-zA-Z\s'-]+$/.test(userMessage)) {
+      return {
+        message: `Please enter your name using only letters.\n\n💭 For example: "John Smith" or "Mary-Jane"\n\nWhat's your name?`,
+      };
+    }
+
+    // Capitalize the name properly
+    const formattedName = this.formatCustomerName(userMessage);
+
+    try {
+      // Save the customer name to database
+      const customer = await this.customersRepository.findOrCreateByPhoneNumber(
+        session.phoneNumber,
+        formattedName,
+      );
+
+      // Update session context
+      session.context[ContextKey.CUSTOMER_NAME] = formattedName;
+      session.context[ContextKey.CUSTOMER_INFO] = customer;
+      session.context[ContextKey.IS_NEW_CUSTOMER] = false;
+
+      return {
+        message: `🎉 **Welcome ${formattedName}!** 😊\n\n✅ Your information has been saved securely\n🍽️ You're now ready to explore our delicious menu!\n\nI'm excited to help you order some amazing food today!`,
+        nextState: ConversationState.BROWSING_PRODUCTS,
+        context: session.context,
+      };
+    } catch (error) {
+      this.logger.error(`Failed to save customer name: ${error.message}`);
+      return {
+        message: `😔 Sorry, I had trouble saving your information.\n\nLet's try again - what's your name?`,
+      };
+    }
+  }
+
+  private handleMainMenuState(
+    session: ConversationSession,
+    parsedInput: ParsedInput,
+  ): BotResponse {
+    const userInput = parsedInput.originalText.trim();
+    const customerName = session.context[ContextKey.CUSTOMER_NAME];
+    const customerInfo = session.context[ContextKey.CUSTOMER_INFO];
+
+    // Handle menu selections
+    switch (userInput) {
+      case '1':
+      case '2':
+        return {
+          message: `${this.getPersonalizedMessage(customerName, "Excellent")}! 🛒\n\nLet's get your order started. I'll show you our amazing products!`,
+          nextState: ConversationState.BROWSING_PRODUCTS,
+        };
+
+      case '3':
+        // Check order status (future feature)
+        const orderMessage = customerName 
+          ? `Hi ${customerName}! 📋 Order tracking is coming soon!\n\nFor now, would you like to place a new order?`
+          : `📋 Order tracking feature is coming soon!\n\nWould you like to browse our menu?`;
+        return {
+          message: orderMessage,
+          nextState: ConversationState.BROWSING_PRODUCTS,
+        };
+
+      case '4':
+        return this.getHelpMenu(customerName);
+
+      case '0':
+        const exitMessage = customerName 
+          ? `Thank you ${customerName}! 👋 It was great serving you today!\n\nType any message anytime to return - I'll remember you! 😊`
+          : `Thank you for visiting! 👋\n\nType any message to return to the main menu.`;
+        return {
+          message: exitMessage,
+        };
+
+      default:
+        // Show main menu for invalid input
+        const menuMessage = this.getMainMenuMessage(customerName, customerInfo);
+        return {
+          message: menuMessage,
+        };
+    }
   }
 
   private async handleBrowsingProductsState(
-    session: ConversationSession,
-    parsedInput: ParsedInput,
+    session: ConversationSession, 
+    parsedInput: ParsedInput
   ): Promise<BotResponse> {
-    const { trigger, entities } = parsedInput;
-
-    if (trigger === StateTrigger.GO_BACK)
-      return {
-        message: "Going back to the main menu.",
-        nextState: ConversationState.GREETING,
-      };
-
-    if (trigger === StateTrigger.ADD_TO_CART) {
-      const productEntity = this.inputParserService.getEntityByType(
-        entities,
-        EntityType.PRODUCT_NAME,
-      );
-      const quantityEntity = this.inputParserService.getEntityByType(
-        entities,
-        EntityType.QUANTITY,
-      );
-
-      if (productEntity) {
-        const quantity = quantityEntity ? parseInt(quantityEntity.value) : 1;
-
-        // fetch dynamic price from repository
-        const products = await this.productsRepository.findAll({
-          availableOnly: true,
-          limit: 50,
-        });
-        const matchedProduct = products.find(
-          (p) => p.name.toLowerCase() === productEntity.value.toLowerCase(),
-        );
-
-        const price = matchedProduct?.price ?? null;
-
-        if (price === null) {
-          return {
-            message: `Sorry, I couldn't find "${productEntity.value}" in our menu.`,
-          };
-        }
-
-        session.context[ContextKey.SELECTED_PRODUCTS] = [
-          { name: productEntity.value, quantity, price },
-        ];
-
+    try {
+      // Get available products from database
+      const products = await this.productsRepository.findAvailableProducts();
+      
+      if (!products || products.length === 0) {
         return {
-          message: `✅ Adding ${quantity}x ${productEntity.value} to your cart...\n\n1️⃣ Add more items\n2️⃣ Review your order\n3️⃣ Continue browsing\n0️⃣ Go back\n\nType a number (0-3):`,
-          nextState: ConversationState.ADDING_TO_CART,
-          context: session.context,
-        };
-      } else {
-        return {
-          message: `Please tell me which product you'd like and how many.\nFor example:\n• "2 pizzas"\n• "1 burger"\n\nWhat would you like to order?`,
+          message: `Sorry, we don't have any products available right now. Please try again later.`,
+          nextState: ConversationState.BROWSING_PRODUCTS,
         };
       }
+
+      // Group products by category
+      const productsByCategory = products.reduce((acc, product) => {
+        const category = product.category || 'Other';
+        if (!acc[category]) acc[category] = [];
+        acc[category].push(product);
+        return acc;
+      }, {} as Record<string, any[]>);
+
+      // Build menu message with global numbering
+      let menuMessage = `Here's our delicious menu! 🍽️\n\n`;
+      let globalIndex = 1;
+      
+      Object.entries(productsByCategory).forEach(([category, categoryProducts]) => {
+        menuMessage += `**${category.toUpperCase()}** 🍴\n`;
+        categoryProducts.forEach((product) => {
+          const price = parseFloat(product.price).toLocaleString('en-NG', {
+            style: 'currency',
+            currency: 'NGN',
+            minimumFractionDigits: 0,
+          });
+          menuMessage += `${globalIndex}. ${product.name} - ${price}\n`;
+          if (product.description) {
+            menuMessage += `   ${product.description}\n`;
+          }
+          globalIndex++;
+        });
+        menuMessage += '\n';
+      });
+
+      menuMessage += `💡 **What would you like to order?**\n\n`;
+      menuMessage += `• Type a number (1-${globalIndex-1}) to select a product\n`;
+      menuMessage += `• Type the product name to add to cart\n`;
+      menuMessage += `• Type "cart" to view your cart\n`;
+      menuMessage += `• Type "no" if you're just browsing\n\n`;
+      menuMessage += `Select 1 or 2 to add the product to cart:`;
+
+      return {
+        message: menuMessage,
+        nextState: ConversationState.ADDING_TO_CART,
+        context: {
+          ...session.context,
+          [ContextKey.SELECTED_PRODUCTS]: products,
+        },
+      };
+    } catch (error) {
+      this.logger.error(`Error fetching products: ${error.message}`);
+      return {
+        message: `Sorry, I'm having trouble loading our menu right now. Please try again later.`,
+        nextState: ConversationState.BROWSING_PRODUCTS,
+      };
     }
-
-    // Display menu dynamically
-    const products = await this.productsRepository.findAvailableProducts({
-      limit: 50,
-      sortBy: "name",
-    });
-    const menu = products
-      .map((p, i) => `${i + 1}️⃣ ${p.name} - ₦${p.price}`)
-      .join("\n");
-
-    return {
-      message: `🍽️ **OUR MENU**\n\n${menu}\n\nType the number to add to cart or 0 to go back.`,
-    };
   }
 
   private async handleAddingToCartState(
-    session: ConversationSession,
-    parsedInput: ParsedInput,
+    session: ConversationSession, 
+    parsedInput: ParsedInput
   ): Promise<BotResponse> {
-    const { trigger } = parsedInput;
-
-    const selectedProducts =
-      session.context[ContextKey.SELECTED_PRODUCTS] || [];
-    let currentOrder = session.context[ContextKey.CURRENT_ORDER] || {
-      items: [],
-    };
-
-    for (const product of selectedProducts) {
-      const existing = currentOrder.items.find(
-        (i: any) => i.name === product.name,
-      );
-      if (existing) existing.quantity += product.quantity;
-      else currentOrder.items.push(product);
+    const userInput = parsedInput.originalText.trim().toLowerCase();
+    
+    // Handle special commands
+    if (userInput === 'cart') {
+      return this.showCart(session);
+    }
+    
+    if (userInput === 'no' || userInput === 'just browsing' || userInput === 'browsing') {
+      return {
+        message: `No problem! 😊 Feel free to browse our delicious menu anytime.\n\nWhenever you're ready to order, just type a number or product name. I'm always here to help! 🍗`,
+        nextState: ConversationState.BROWSING_PRODUCTS,
+      };
+    }
+    
+    if (userInput === 'checkout' || userInput === 'review order') {
+      return this.proceedToCheckout(session);
     }
 
-    currentOrder.totalAmount = currentOrder.items.reduce(
-      (sum, item) => sum + (item.price || 0) * (item.quantity || 1),
-      0,
-    );
-
-    session.context[ContextKey.CURRENT_ORDER] = currentOrder;
-    session.context[ContextKey.SELECTED_PRODUCTS] = [];
-    await this.sessionService.updateContext(
-      session.phoneNumber,
-      session.context,
-    );
-
-    if (trigger === StateTrigger.REVIEW_ORDER) {
-      if (currentOrder.items.length > 0)
+    try {
+      // Always fetch fresh products to ensure we have the latest data
+      const availableProducts = await this.productsRepository.findAvailableProducts();
+      
+      if (!availableProducts || availableProducts.length === 0) {
         return {
-          message: this.formatOrderSummary(currentOrder),
-          nextState: ConversationState.REVIEWING_ORDER,
+          message: `Sorry, we don't have any products available right now. Please try again later.`,
+          nextState: ConversationState.BROWSING_PRODUCTS,
         };
+      }
+
+      // Update session context with fresh products
+      session.context[ContextKey.SELECTED_PRODUCTS] = availableProducts;
+
+      // Check if user entered a number
+      const productNumber = parseInt(userInput);
+      let matchedProduct = null;
+
+      if (!isNaN(productNumber) && productNumber > 0 && productNumber <= availableProducts.length) {
+        // User selected by number
+        matchedProduct = availableProducts[productNumber - 1];
+      } else {
+        // Find product by name (fuzzy matching)
+        matchedProduct = this.findProductByName(userInput, availableProducts);
+      }
+      
+      if (!matchedProduct) {
+        return {
+          message: `I couldn't find "${parsedInput.originalText}" in our menu.\n\n💡 Try typing a number (1-${availableProducts.length}) or the exact product name.\n\nType "menu" to see all products or "cart" to view your current cart.`,
+        };
+      }
+
+      // Store selected product and ask for quantity
+      session.context[ContextKey.SELECTED_PRODUCT_FOR_QUANTITY] = matchedProduct;
+
+      const price = parseFloat(matchedProduct.price).toLocaleString('en-NG', {
+        style: 'currency',
+        currency: 'NGN',
+        minimumFractionDigits: 0,
+      });
+
       return {
-        message: "Your cart is empty. Would you like to browse our products?",
+        message: `🍽️ **${matchedProduct.name}** - ${price}\n${matchedProduct.description ? `${matchedProduct.description}\n\n` : '\n'}📦 **How many would you like?**\n\nType a number (e.g., 1, 2, 3...)\nOr type "no" if you're just browsing.`,
+        nextState: ConversationState.COLLECTING_QUANTITY,
+        context: session.context,
+      };
+
+    } catch (error) {
+      this.logger.error(`Error adding to cart: ${error.message}`);
+      return {
+        message: `Sorry, I had trouble adding that to your cart. Please try again.`,
+      };
+    }
+  }
+
+  private async handleCollectingQuantityState(
+    session: ConversationSession, 
+    parsedInput: ParsedInput
+  ): Promise<BotResponse> {
+    const selectedProduct = session.context[ContextKey.SELECTED_PRODUCT_FOR_QUANTITY];
+    const userInput = parsedInput.originalText.trim().toLowerCase();
+
+    if (!selectedProduct) {
+      return {
+        message: `Sorry, something went wrong. Let's start over.`,
         nextState: ConversationState.BROWSING_PRODUCTS,
       };
     }
 
-    return {
-      message: `🛒 **CART OPTIONS**\n\n1️⃣ Add more items\n2️⃣ Remove items\n3️⃣ Review my order\n4️⃣ Keep shopping\n5️⃣ Checkout now\n0️⃣ Go back\n\nType a number (0-5):`,
-    };
-  }
-
-  private handleReviewingOrderState(
-    session: ConversationSession,
-    parsedInput: ParsedInput,
-  ): BotResponse {
-    const { trigger } = parsedInput;
-    const currentOrder = session.context[ContextKey.CURRENT_ORDER];
-
-    if (
-      trigger === StateTrigger.CONFIRM_ORDER &&
-      currentOrder?.items?.length > 0
-    ) {
-      const paymentReference = this.generatePaymentReference();
+    // Handle browsing option
+    if (userInput === 'no' || userInput === 'just browsing' || userInput === 'browsing') {
+      // Clear selected product
+      delete session.context[ContextKey.SELECTED_PRODUCT_FOR_QUANTITY];
       return {
-        message: `Perfect! Your order has been confirmed.\n\n${this.formatOrderSummary(currentOrder)}\n\n💳 Payment Details:\nReference: ${paymentReference}\nAmount: ₦${currentOrder.totalAmount || "0.00"}\n\nPlease send your payment and reply with "paid" when done.`,
-        nextState: ConversationState.AWAITING_PAYMENT,
-        context: {
-          ...session.context,
-          [ContextKey.PAYMENT_REFERENCE]: paymentReference,
-        },
-      };
-    }
-
-    return {
-      message: `${this.formatOrderSummary(currentOrder)}\n\n📋 **ORDER REVIEW**\n\n1️⃣ Confirm & place order\n2️⃣ Add more items\n3️⃣ Remove items\n4️⃣ Cancel order\n0️⃣ Go back\n\nType a number (0-4):`,
-    };
-  }
-
-  private handleAwaitingPaymentState(
-    session: ConversationSession,
-    parsedInput: ParsedInput,
-  ): BotResponse {
-    const { trigger } = parsedInput;
-
-    if (trigger === StateTrigger.CONFIRM_PAYMENT) {
-      return {
-        message: `Thank you! I'm verifying your payment...\n\nReference: ${session.context[ContextKey.PAYMENT_REFERENCE]}\nPlease wait while I confirm your payment.`,
-        nextState: ConversationState.PAYMENT_CONFIRMATION,
-      };
-    }
-
-    return {
-      message: `Waiting for your payment...\n\n💳 Reference: ${session.context[ContextKey.PAYMENT_REFERENCE]}\nAmount: ₦${session.context[ContextKey.CURRENT_ORDER]?.totalAmount || "0.00"}\n\nReply "paid" when done or "cancel" to cancel the order.`,
-    };
-  }
-
-  private handlePaymentConfirmationState(
-    session: ConversationSession,
-    parsedInput: ParsedInput,
-  ): BotResponse {
-    const isPaymentVerified = Math.random() > 0.2; // demo
-
-    if (isPaymentVerified) {
-      return {
-        message: `🎉 Payment confirmed! Your order is being prepared.\n\nOrder Details:\n${this.formatOrderSummary(session.context[ContextKey.CURRENT_ORDER])}\n⏰ Estimated delivery: 30-45 minutes\n\nThank you for your order!\n\nType "new order" to place another order.`,
-        nextState: ConversationState.ORDER_COMPLETE,
-      };
-    }
-
-    return {
-      message: `❌ Payment verification failed.\nPlease try again or contact support.\nReference: ${session.context[ContextKey.PAYMENT_REFERENCE]}`,
-      nextState: ConversationState.AWAITING_PAYMENT,
-    };
-  }
-
-  private handleOrderCompleteState(
-    session: ConversationSession,
-    parsedInput: ParsedInput,
-  ): BotResponse {
-    const { trigger } = parsedInput;
-
-    if (trigger === StateTrigger.VIEW_PRODUCTS)
-      return {
-        message: "Great! Let me show you our menu for your new order.",
+        message: `No problem! 😊 Feel free to browse our delicious menu anytime.\n\nWhenever you're ready to order, just type a number or product name. I'm always here to help! 🍗`,
         nextState: ConversationState.BROWSING_PRODUCTS,
+        context: session.context,
       };
-    if (trigger === StateTrigger.START_OVER)
+    }
+
+    // Parse quantity
+    const quantity = parseInt(userInput);
+    
+    if (isNaN(quantity) || quantity < 1 || quantity > 99) {
       return {
-        message: "Welcome back! How can I help you today?",
-        nextState: ConversationState.GREETING,
+        message: `Please enter a valid quantity between 1 and 99.\n\n📦 How many **${selectedProduct.name}** would you like?\n\nOr type "no" if you're just browsing.`,
+      };
+    }
+
+    try {
+      // Add product to cart with specified quantity
+      const addToCartResult = await this.orderFlowService.addItemToCart(
+        session,
+        selectedProduct.id,
+        quantity
+      );
+
+      if (!addToCartResult.success) {
+        return {
+          message: `Sorry, I couldn't add "${selectedProduct.name}" to your cart. ${addToCartResult.error || 'Please try again.'}`,
+          nextState: ConversationState.ADDING_TO_CART,
+        };
+      }
+
+      // Clear selected product from context
+      delete session.context[ContextKey.SELECTED_PRODUCT_FOR_QUANTITY];
+
+      const price = parseFloat(selectedProduct.price).toLocaleString('en-NG', {
+        style: 'currency',
+        currency: 'NGN',
+        minimumFractionDigits: 0,
+      });
+
+      const totalPrice = (parseFloat(selectedProduct.price) * quantity).toLocaleString('en-NG', {
+        style: 'currency',
+        currency: 'NGN',
+        minimumFractionDigits: 0,
+      });
+
+      const availableProducts = session.context[ContextKey.SELECTED_PRODUCTS] || [];
+
+      return {
+        message: `✅ **Added to cart!**\n\n🍽️ ${selectedProduct.name} x${quantity} = ${totalPrice}\n\n🤔 **Do you want to add anything else?**\n\n• Type a number (1-${availableProducts.length}) or product name to add more\n• Type "cart" to view your cart\n• Type "checkout" to review your order\n• Type "no" if you're done browsing`,
+        nextState: ConversationState.ADDING_TO_CART,
+        context: session.context,
       };
 
+    } catch (error) {
+      this.logger.error(`Error adding to cart: ${error.message}`);
+      return {
+        message: `Sorry, I had trouble adding that to your cart. Please try again.`,
+        nextState: ConversationState.ADDING_TO_CART,
+      };
+    }
+  }
+
+  /**
+   * Get personalized message with customer name
+   */
+  private getPersonalizedMessage(customerName: string | null, defaultMessage: string): string {
+    if (!customerName) return defaultMessage;
+    
+    const personalizedPrefixes = [
+      `${defaultMessage}, ${customerName}`,
+      `Great choice, ${customerName}`,
+      `Perfect, ${customerName}`,
+      `Excellent, ${customerName}`,
+      `Wonderful, ${customerName}`,
+    ];
+    
+    return personalizedPrefixes[Math.floor(Math.random() * personalizedPrefixes.length)];
+  }
+
+  /**
+   * Get main menu message with personalization
+   */
+  private getMainMenuMessage(customerName: string | null, customerInfo?: any): string {
+    const greeting = customerName 
+      ? `Hi ${customerName}! 😊 What would you like to do?`
+      : `Hi there! 😊 What would you like to do?`;
+    
+    return `${greeting}\n\n📱 **MAIN MENU**\n\n1️⃣ 🍽️ Browse Products\n2️⃣ 🛒 Place Order\n3️⃣ 📋 Order Status\n4️⃣ ❓ Help\n0️⃣ 👋 Exit\n\n*Type the number of your choice:*`;
+  }
+
+  /**
+   * Get help menu with personalization
+   */
+  private getHelpMenu(customerName?: string): BotResponse {
+    const greeting = customerName ? `${customerName}, here's` : "Here's";
+    
     return {
-      message: `🎉 **ORDER COMPLETE!**\n\n**WHAT'S NEXT?**\n\n1️⃣ Place a new order\n2️⃣ View menu\n3️⃣ Order status\n4️⃣ Get help\n5️⃣ Contact support\n0️⃣ Exit\n\nType a number (0-5):`,
+      message: `🤖 **HELP MENU**\n\n${greeting} how I can assist you:\n\n1️⃣ 📖 How to browse products\n2️⃣ 🛒 How to place an order\n3️⃣ 💳 Payment methods\n4️⃣ 📞 Contact support\n5️⃣ 🏠 Return to main menu\n0️⃣ ⬅️ Go back\n\n*Type a number (0-5):*`,
     };
   }
 
-  private formatOrderSummary(order: any): string {
-    if (!order?.items?.length) return "Your cart is empty.";
-    let summary = "📋 Your Order:\n";
-    order.items.forEach((item: any, i: number) => {
-      const itemTotal = (item.price || 0) * (item.quantity || 1);
-      summary += `${i + 1}. ${item.name} x${item.quantity} - ₦${itemTotal.toFixed(2)}\n`;
+  /**
+   * Format customer name properly
+   */
+  private formatCustomerName(name: string): string {
+    return name
+      .trim()
+      .toLowerCase()
+      .split(' ')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
+  }
+
+  /**
+   * Find product by name with fuzzy matching
+   */
+  private findProductByName(searchTerm: string, products: any[]): any | null {
+    const normalizedSearch = searchTerm.toLowerCase().trim();
+    
+    // Exact match first
+    let match = products.find(p => 
+      p.name.toLowerCase() === normalizedSearch
+    );
+    
+    if (match) return match;
+    
+    // Partial match
+    match = products.find(p => 
+      p.name.toLowerCase().includes(normalizedSearch) ||
+      normalizedSearch.includes(p.name.toLowerCase())
+    );
+    
+    if (match) return match;
+    
+    // Word-based matching
+    const searchWords = normalizedSearch.split(' ');
+    match = products.find(p => {
+      const productWords = p.name.toLowerCase().split(' ');
+      return searchWords.some(searchWord => 
+        productWords.some(productWord => 
+          productWord.includes(searchWord) || searchWord.includes(productWord)
+        )
+      );
     });
-    summary += `\n💰 Total: ₦${order.totalAmount?.toFixed(2) || "0.00"}`;
-    return summary;
+    
+    return match || null;
   }
 
-  private generatePaymentReference(): string {
-    const timestamp = Date.now().toString(36);
-    const random = Math.random().toString(36).substring(2, 8);
-    return `PAY-${timestamp}-${random}`.toUpperCase();
+  /**
+   * Show current cart contents
+   */
+  private async showCart(session: ConversationSession): Promise<BotResponse> {
+    try {
+      const cartSummary = this.orderFlowService.getCartSummary(session);
+      
+      if (!cartSummary || cartSummary.items.length === 0) {
+        return {
+          message: `Your cart is empty! 🛒\n\n🍽️ Browse our menu to add some delicious items!\n\nType "menu" to see our products.`,
+          nextState: ConversationState.BROWSING_PRODUCTS,
+        };
+      }
+
+      let cartMessage = `Here's your cart! 🛒\n\n`;
+      
+      cartSummary.items.forEach((item, index) => {
+        const itemTotal = item.totalPrice.toLocaleString('en-NG', {
+          style: 'currency',
+          currency: 'NGN',
+          minimumFractionDigits: 0,
+        });
+        cartMessage += `${index + 1}. ${item.productName} x${item.quantity} - ${itemTotal}\n`;
+      });
+      
+      const total = cartSummary.total.toLocaleString('en-NG', {
+        style: 'currency',
+        currency: 'NGN',
+        minimumFractionDigits: 0,
+      });
+      
+      cartMessage += `\n💰 **Total: ${total}**\n\n`;
+      cartMessage += `🛒 **Options:**\n`;
+      cartMessage += `• Type "checkout" to review and place order\n`;
+      cartMessage += `• Type "clear cart" to empty your cart\n`;
+      cartMessage += `• Type a product name to add more items\n`;
+      cartMessage += `• Type "menu" to return to main menu`;
+
+      return {
+        message: cartMessage,
+      };
+    } catch (error) {
+      this.logger.error(`Error showing cart: ${error.message}`);
+      return {
+        message: `Sorry, I had trouble loading your cart. Please try again.`,
+      };
+    }
+  }
+
+  /**
+   * Proceed to checkout
+   */
+  private async proceedToCheckout(session: ConversationSession): Promise<BotResponse> {
+    try {
+      const cartSummary = this.orderFlowService.getCartSummary(session);
+      
+      if (!cartSummary || cartSummary.items.length === 0) {
+        return {
+          message: `Your cart is empty! Please add some items first.\n\nType "menu" to browse our products.`,
+          nextState: ConversationState.BROWSING_PRODUCTS,
+        };
+      }
+
+      return {
+        message: `Let's review your order! 📋`,
+        nextState: ConversationState.REVIEWING_ORDER,
+      };
+    } catch (error) {
+      this.logger.error(`Error proceeding to checkout: ${error.message}`);
+      return {
+        message: `Sorry, I had trouble processing your checkout. Please try again.`,
+      };
+    }
+  }
+
+  // Placeholder methods for other states
+  private async handleReviewingOrderState(session: ConversationSession, parsedInput: ParsedInput): Promise<BotResponse> {
+    return {
+      message: `Reviewing order! (Implementation needed)`,
+    };
+  }
+
+  private handleAwaitingPaymentState(session: ConversationSession, parsedInput: ParsedInput): BotResponse {
+    return {
+      message: `Awaiting payment! (Implementation needed)`,
+    };
+  }
+
+  private handlePaymentConfirmationState(session: ConversationSession, parsedInput: ParsedInput): BotResponse {
+    return {
+      message: `Payment confirmation! (Implementation needed)`,
+    };
+  }
+
+  private handleOrderCompleteState(session: ConversationSession, parsedInput: ParsedInput): BotResponse {
+    return {
+      message: `Order complete! (Implementation needed)`,
+    };
   }
 }

@@ -2,7 +2,6 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../src/app.module';
 import { DatabaseService } from '../src/database/database.service';
 import { MigrationService } from '../src/database/migration.service';
-import { runSeeds } from '../src/database/seeds';
 
 async function runMigrations() {
   const app = await NestFactory.createApplicationContext(AppModule);
@@ -17,7 +16,7 @@ async function runMigrations() {
     // Run seeds if requested
     const shouldSeed = process.argv.includes('--seed');
     if (shouldSeed) {
-      await runSeeds(databaseService);
+      console.log('Seeds functionality not implemented yet');
     }
 
     console.log('Migration process completed successfully');

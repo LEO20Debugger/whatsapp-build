@@ -84,9 +84,15 @@ export enum StateTrigger {
 export enum ContextKey {
   CURRENT_ORDER = "currentOrder",
   SELECTED_PRODUCTS = "selectedProducts",
+  SELECTED_PRODUCT_FOR_QUANTITY = "selectedProductForQuantity",
   PAYMENT_REFERENCE = "paymentReference",
+  ORDER_ID = "orderId",
+  ORDER_TOTAL = "orderTotal",
   CUSTOMER_INFO = "customerInfo",
+  CUSTOMER_NAME = "customerName",
+  IS_NEW_CUSTOMER = "isNewCustomer",
   ERROR_COUNT = "errorCount",
   LAST_MESSAGE = "lastMessage",
   RETRY_COUNT = "retryCount",
+  ORDER_VALIDATION_ERRORS = "orderValidationErrors",
 }

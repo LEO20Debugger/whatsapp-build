@@ -1,5 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { RedisService } from "../../../common/redis/redis.service";
+import { HybridSessionManager } from "./hybrid-session-manager.service";
 import {
   ConversationSession,
   ConversationState,
@@ -12,30 +13,27 @@ export class ConversationSessionService {
   private readonly defaultTtl = 3600; // 1 hour in seconds
   private readonly keyPrefix = "conversation:session:";
 
-  constructor(private readonly redisService: RedisService) {}
+  constructor(
+    private readonly redisService: RedisService,
+    private readonly hybridSessionManager: HybridSessionManager,
+  ) {}
 
   /**
    * Get conversation session for a phone number
    */
   async getSession(phoneNumber: string): Promise<ConversationSession | null> {
     try {
-      const key = this.getSessionKey(phoneNumber);
-      const sessionData = await this.redisService.get(key);
+      // Use hybrid session manager for persistence
+      const session = await this.hybridSessionManager.getSession(phoneNumber);
 
-      if (!sessionData) {
+      if (session) {
+        this.logger.debug(`Retrieved session for phone number: ${phoneNumber}`, {
+          state: session.currentState,
+          lastActivity: session.lastActivity,
+        });
+      } else {
         this.logger.debug(`No session found for phone number: ${phoneNumber}`);
-        return null;
       }
-
-      const session = JSON.parse(sessionData) as ConversationSession;
-
-      // Convert lastActivity back to Date object
-      session.lastActivity = new Date(session.lastActivity);
-
-      this.logger.debug(`Retrieved session for phone number: ${phoneNumber}`, {
-        state: session.currentState,
-        lastActivity: session.lastActivity,
-      });
 
       return session;
     } catch (error) {
@@ -55,21 +53,17 @@ export class ConversationSessionService {
     options: SessionStorageOptions = {},
   ): Promise<boolean> {
     try {
-      const key = this.getSessionKey(session.phoneNumber);
-      const ttl = options.ttl || this.defaultTtl;
-
       // Update last activity
       session.lastActivity = new Date();
 
-      const sessionData = JSON.stringify(session);
-      const success = await this.redisService.set(key, sessionData, ttl);
+      // Use hybrid session manager for persistence
+      const success = await this.hybridSessionManager.updateSession(session);
 
       if (success) {
         this.logger.debug(
           `Saved session for phone number: ${session.phoneNumber}`,
           {
             state: session.currentState,
-            ttl,
           },
         );
       } else {
@@ -95,28 +89,23 @@ export class ConversationSessionService {
     phoneNumber: string,
     initialState: ConversationState = ConversationState.GREETING,
     options: SessionStorageOptions = {},
+    customerId?: string,
   ): Promise<ConversationSession | null> {
     try {
-      const session: ConversationSession = {
-        phoneNumber,
-        currentState: initialState,
-        lastActivity: new Date(),
-        context: {},
-      };
+      // Use hybrid session manager for persistence
+      const session = await this.hybridSessionManager.createSession(phoneNumber, initialState, customerId);
 
-      const success = await this.setSession(session, options);
-
-      if (success) {
+      if (session) {
         this.logger.log(
           `Created new session for phone number: ${phoneNumber}`,
           {
             initialState,
+            customerId,
           },
         );
-        return session;
       }
 
-      return null;
+      return session;
     } catch (error) {
       this.logger.error(
         `Failed to create session for phone number: ${phoneNumber}`,
@@ -151,7 +140,7 @@ export class ConversationSessionService {
         session.context = { ...session.context, ...context };
       }
 
-      const success = await this.setSession(session);
+      const success = await this.hybridSessionManager.updateSession(session);
 
       if (success) {
         this.logger.debug(`Updated state for phone number: ${phoneNumber}`, {
@@ -189,7 +178,7 @@ export class ConversationSessionService {
       }
 
       session.context = { ...session.context, ...context };
-      const success = await this.setSession(session);
+      const success = await this.hybridSessionManager.updateSession(session);
 
       if (success) {
         this.logger.debug(`Updated context for phone number: ${phoneNumber}`, {
@@ -212,8 +201,7 @@ export class ConversationSessionService {
    */
   async deleteSession(phoneNumber: string): Promise<boolean> {
     try {
-      const key = this.getSessionKey(phoneNumber);
-      const success = await this.redisService.del(key);
+      const success = await this.hybridSessionManager.deleteSession(phoneNumber);
 
       if (success) {
         this.logger.debug(`Deleted session for phone number: ${phoneNumber}`);
@@ -395,6 +383,29 @@ export class ConversationSessionService {
         totalSessions: 0,
         sessionsByState: {} as Record<ConversationState, number>,
       };
+    }
+  }
+
+  /**
+   * Update session with customer ID
+   */
+  async updateSessionCustomerId(phoneNumber: string, customerId: string): Promise<boolean> {
+    try {
+      const success = await this.hybridSessionManager.updateSessionCustomerId(phoneNumber, customerId);
+
+      if (success) {
+        this.logger.debug(`Updated customer ID for phone number: ${phoneNumber}`, {
+          customerId,
+        });
+      }
+
+      return success;
+    } catch (error) {
+      this.logger.error(
+        `Failed to update customer ID for phone number: ${phoneNumber}`,
+        { error: error.message },
+      );
+      return false;
     }
   }
 

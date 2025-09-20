@@ -1,7 +1,8 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { IncomingMessage } from "../interfaces/whatsapp.interface";
 import { WhatsAppMessageService } from "./whatsapp-message.service";
-import { ConversationFlowService } from "../../conversations/services/conversation-flow.service";
+import { ConversationService } from "../../conversations/services/conversation.service";
+import { MessageLoggingService } from "../../conversations/services/message-logging.service";
 import { BotResponse } from "../../conversations/types/conversation.types";
 import {
   ParsedMessage,
@@ -18,7 +19,8 @@ export class MessageProcessingService {
 
   constructor(
     private readonly whatsappMessageService: WhatsAppMessageService,
-    private readonly conversationFlowService: ConversationFlowService,
+    private readonly conversationService: ConversationService,
+    private readonly messageLoggingService: MessageLoggingService,
   ) {}
 
   /**
@@ -71,6 +73,9 @@ export class MessageProcessingService {
         );
       }
 
+      // Log inbound message
+      await this.logInboundMessage(parsedMessage);
+
       // Validate parsed content
       const contentValidation = this.validateMessageContent(
         parsedMessage.content,
@@ -98,7 +103,7 @@ export class MessageProcessingService {
       );
 
       // Send response back to user
-      await this.sendResponse(message.from, response);
+      await this.sendResponse(message.from, response, processingContext);
 
       const processingTime = Date.now() - startTime;
       this.logger.log(
@@ -197,13 +202,18 @@ export class MessageProcessingService {
         return this.handleNonTextMessage(parsedMessage);
       }
 
-      // Process text message through conversation flow
-      const response = await this.conversationFlowService.processMessage(
+      // Process text message through conversation service
+      const conversationResult = await this.conversationService.processConversation(
         parsedMessage.from,
         parsedMessage.content,
+        {
+          phoneNumber: parsedMessage.from,
+          messageId: parsedMessage.id,
+          timestamp: parsedMessage.timestamp,
+        },
       );
 
-      return response;
+      return conversationResult.response;
     } catch (error) {
       this.logger.error(`Error routing message to conversation flow:`, error);
 
@@ -251,6 +261,7 @@ export class MessageProcessingService {
   private async sendResponse(
     phoneNumber: string,
     response: BotResponse,
+    processingContext?: MessageProcessingContext,
   ): Promise<void> {
     try {
       if (!response.message) {
@@ -258,16 +269,37 @@ export class MessageProcessingService {
         return;
       }
 
-      await this.whatsappMessageService.sendMessage(phoneNumber, {
+      const apiResponse = await this.whatsappMessageService.sendMessage(phoneNumber, {
         type: "text",
         text: {
           body: response.message,
         },
       });
 
+      // Log outbound message
+      await this.logOutboundMessage(
+        phoneNumber,
+        response.message,
+        apiResponse?.messages?.[0]?.id,
+        'text',
+        'sent',
+        processingContext,
+      );
+
       this.logger.log(`Sent response to ${phoneNumber}`);
     } catch (error) {
       this.logger.error(`Error sending response to ${phoneNumber}:`, error);
+      
+      // Log failed outbound message
+      await this.logOutboundMessage(
+        phoneNumber,
+        response.message,
+        undefined,
+        'text',
+        'failed',
+        processingContext,
+        error.message,
+      );
     }
   }
 
@@ -279,16 +311,36 @@ export class MessageProcessingService {
     errorMessage: string,
   ): Promise<void> {
     try {
-      await this.whatsappMessageService.sendMessage(phoneNumber, {
+      const apiResponse = await this.whatsappMessageService.sendMessage(phoneNumber, {
         type: "text",
         text: {
           body: errorMessage,
         },
       });
+
+      // Log error response
+      await this.logOutboundMessage(
+        phoneNumber,
+        errorMessage,
+        apiResponse?.messages?.[0]?.id,
+        'text',
+        'sent',
+      );
     } catch (error) {
       this.logger.error(
         `Error sending error response to ${phoneNumber}:`,
         error,
+      );
+      
+      // Log failed error response
+      await this.logOutboundMessage(
+        phoneNumber,
+        errorMessage,
+        undefined,
+        'text',
+        'failed',
+        undefined,
+        error.message,
       );
     }
   }
@@ -421,5 +473,57 @@ export class MessageProcessingService {
         processingTime || Date.now() - context.processingStartTime,
       timestamp: context.timestamp,
     };
+  }
+
+  /**
+   * Log inbound message from customer
+   */
+  private async logInboundMessage(parsedMessage: ParsedMessage): Promise<void> {
+    try {
+      // Get current session to capture conversation state
+      const session = await this.conversationService.getConversationSession(parsedMessage.from);
+      
+      await this.messageLoggingService.logInboundMessage(
+        parsedMessage.from,
+        parsedMessage.content,
+        parsedMessage.id,
+        parsedMessage.type.toLowerCase(),
+        session?.currentState,
+        session?.context,
+      );
+    } catch (error) {
+      this.logger.error(`Failed to log inbound message: ${error.message}`);
+    }
+  }
+
+  /**
+   * Log outbound message to customer
+   */
+  private async logOutboundMessage(
+    phoneNumber: string,
+    content: string,
+    messageId?: string,
+    messageType: string = 'text',
+    status: 'sent' | 'delivered' | 'read' | 'failed' = 'sent',
+    processingContext?: MessageProcessingContext,
+    errorMessage?: string,
+  ): Promise<void> {
+    try {
+      // Get current session to capture conversation state
+      const session = await this.conversationService.getConversationSession(phoneNumber);
+      
+      await this.messageLoggingService.logOutboundMessage(
+        phoneNumber,
+        content,
+        messageId,
+        messageType,
+        status,
+        session?.currentState,
+        session?.context,
+        errorMessage,
+      );
+    } catch (error) {
+      this.logger.error(`Failed to log outbound message: ${error.message}`);
+    }
   }
 }

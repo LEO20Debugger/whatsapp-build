@@ -149,15 +149,15 @@
   - Write unit tests for receipt generation
   - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5_
 
-- [ ] 10. Implement conversation service integration
-- [ ] 10.1 Create main conversation service
+- [-] 10. Implement conversation service integration
+- [x] 10.1 Create main conversation service
   - Integrate state machine with message processing
   - Implement conversation flow orchestration
   - Add context switching and state persistence
   - Write unit tests for conversation service
   - _Requirements: 1.1, 1.2, 1.3, 7.4_
 
-- [ ] 10.2 Implement order flow integration
+- [x] 10.2 Implement order flow integration
   - Connect conversation service with order service
   - Implement cart management within conversations
   - Add order confirmation and review flows

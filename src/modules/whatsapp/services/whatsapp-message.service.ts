@@ -31,6 +31,35 @@ export class WhatsAppMessageService {
       this.validatePhoneNumber(to);
       this.validateMessageContent(content);
 
+      // Extract message body from content
+      let messageBody = "";
+      if (content.type === "text" && content.text?.body) {
+        messageBody = content.text.body;
+      } else if (content.type === "template" && content.template) {
+        // For templates, we'll use a simple text message for now
+        messageBody = `Template: ${content.template.name}`;
+      } else {
+        messageBody = "Hello from your order bot!";
+      }
+
+      // Check if development mode is enabled
+      const devMode = this.configService.get<string>("WHATSAPP_DEV_MODE") === "true";
+      const nodeEnv = this.configService.get<string>("NODE_ENV");
+      
+      if (devMode || nodeEnv === "development") {
+        // Development mode: Log message instead of sending
+        this.logger.log(`🚀 DEV MODE - Would send message to ${to}:`);
+        this.logger.log(`📱 Message: ${messageBody}`);
+        this.logger.log(`📊 Content Type: ${content.type}`);
+        
+        // Return mock response for development
+        return {
+          messaging_product: "whatsapp",
+          contacts: [{ input: to, wa_id: to }],
+          messages: [{ id: `dev_${Date.now()}` }],
+        };
+      }
+
       const fromNumber = this.configService.get<string>(
         "TWILIO_WHATSAPP_NUMBER",
       );
@@ -44,17 +73,6 @@ export class WhatsAppMessageService {
 
       // Format phone numbers for WhatsApp
       const toNumber = this.formatWhatsAppNumber(to);
-
-      // Extract message body from content
-      let messageBody = "";
-      if (content.type === "text" && content.text?.body) {
-        messageBody = content.text.body;
-      } else if (content.type === "template" && content.template) {
-        // For templates, we'll use a simple text message for now
-        messageBody = `Template: ${content.template.name}`;
-      } else {
-        messageBody = "Hello from your order bot!";
-      }
 
       this.logger.log(`Sending ${content.type} message to ${to}`);
 
@@ -76,6 +94,25 @@ export class WhatsAppMessageService {
       if (error instanceof HttpException) {
         throw error;
       }
+      
+      // Check if it's a rate limit error and handle gracefully in dev mode
+      if (error.code === 63038 || error.status === 429) {
+        const devMode = this.configService.get<string>("WHATSAPP_DEV_MODE") === "true";
+        const nodeEnv = this.configService.get<string>("NODE_ENV");
+        
+        if (devMode || nodeEnv === "development") {
+          this.logger.warn(`⚠️ Rate limit hit - switching to dev mode for: ${to}`);
+          this.logger.log(`📱 Would send: ${content.text?.body || "Message content"}`);
+          
+          // Return mock response when rate limited in dev
+          return {
+            messaging_product: "whatsapp",
+            contacts: [{ input: to, wa_id: to }],
+            messages: [{ id: `rate_limited_${Date.now()}` }],
+          };
+        }
+      }
+      
       this.handleApiError(error, to, content?.type || "unknown");
       throw error;
     }
