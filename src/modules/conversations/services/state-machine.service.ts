@@ -19,9 +19,7 @@ export class StateMachineService {
     this.config = this.initializeStateMachine();
   }
 
-  /**
-   * Initialize the state machine configuration
-   */
+  /** Initialize the state machine configuration */
   private initializeStateMachine(): StateMachineConfig {
     const states: StateDefinition[] = [
       {
@@ -353,14 +351,12 @@ export class StateMachineService {
     };
   }
 
-  /**
-   * Validate if a state transition is allowed
-   */
+  /** Validate if a state transition is allowed */
   canTransition(
     fromState: ConversationState,
     toState: ConversationState,
     trigger: StateTrigger,
-    context: Record<string, any> = {},
+    context: Record<string, any> = {}
   ): boolean {
     try {
       // Check if the target state is in allowed transitions
@@ -371,8 +367,7 @@ export class StateMachineService {
 
       // Find matching transition
       const transition = this.config.transitions.find(
-        (t) =>
-          t.from === fromState && t.to === toState && t.trigger === trigger,
+        (t) => t.from === fromState && t.to === toState && t.trigger === trigger
       );
 
       if (!transition) {
@@ -396,18 +391,16 @@ export class StateMachineService {
     }
   }
 
-  /**
-   * Execute a state transition
-   */
+  /** Execute a state transition */
   executeTransition(
     fromState: ConversationState,
     trigger: StateTrigger,
-    context: Record<string, any> = {},
+    context: Record<string, any> = {}
   ): TransitionResult {
     try {
       // Find all possible transitions from current state with the given trigger
       const possibleTransitions = this.config.transitions.filter(
-        (t) => t.from === fromState && t.trigger === trigger,
+        (t) => t.from === fromState && t.trigger === trigger
       );
 
       if (possibleTransitions.length === 0) {
@@ -459,40 +452,30 @@ export class StateMachineService {
     }
   }
 
-  /**
-   * Get state definition
-   */
+  /** Get state definition */
   getStateDefinition(state: ConversationState): StateDefinition | undefined {
     return this.config.states.find((s) => s.state === state);
   }
 
-  /**
-   * Get all allowed transitions from a state
-   */
+  /** Get all allowed transitions from a state */
   getAllowedTransitions(state: ConversationState): ConversationState[] {
     const stateDefinition = this.getStateDefinition(state);
     return stateDefinition?.allowedTransitions || [];
   }
 
-  /**
-   * Check if a state is terminal
-   */
+  /** Check if a state is terminal */
   isTerminalState(state: ConversationState): boolean {
     const stateDefinition = this.getStateDefinition(state);
     return stateDefinition?.isTerminal || false;
   }
 
-  /**
-   * Get state timeout
-   */
+  /** Get state timeout */
   getStateTimeout(state: ConversationState): number | undefined {
     const stateDefinition = this.getStateDefinition(state);
     return stateDefinition?.timeout;
   }
 
-  /**
-   * Validate state machine configuration
-   */
+  /** Validate state machine configuration */
   validateConfiguration(): ValidationResult {
     const errors: string[] = [];
 
@@ -510,12 +493,12 @@ export class StateMachineService {
     for (const transition of this.config.transitions) {
       if (!definedStates.has(transition.from)) {
         errors.push(
-          `Transition references undefined from state: ${transition.from}`,
+          `Transition references undefined from state: ${transition.from}`
         );
       }
       if (!definedStates.has(transition.to)) {
         errors.push(
-          `Transition references undefined to state: ${transition.to}`,
+          `Transition references undefined to state: ${transition.to}`
         );
       }
     }
@@ -525,7 +508,7 @@ export class StateMachineService {
       for (const allowedTransition of stateDefinition.allowedTransitions) {
         if (!definedStates.has(allowedTransition)) {
           errors.push(
-            `State ${stateDefinition.state} allows transition to undefined state: ${allowedTransition}`,
+            `State ${stateDefinition.state} allows transition to undefined state: ${allowedTransition}`
           );
         }
       }
@@ -537,25 +520,19 @@ export class StateMachineService {
     };
   }
 
-  /**
-   * Get initial state
-   */
+  /** Get initial state */
   getInitialState(): ConversationState {
     return this.config.initialState;
   }
 
-  /**
-   * Generate a unique payment reference
-   */
+  /** Generate a unique payment reference */
   private generatePaymentReference(): string {
     const timestamp = Date.now().toString(36);
     const random = Math.random().toString(36).substring(2, 8);
     return `PAY-${timestamp}-${random}`.toUpperCase();
   }
 
-  /**
-   * Get all available triggers for a state
-   */
+  /** Get all available triggers for a state */
   getAvailableTriggers(state: ConversationState): StateTrigger[] {
     const triggers = this.config.transitions
       .filter((t) => t.from === state)
@@ -564,9 +541,7 @@ export class StateMachineService {
     return [...new Set(triggers)]; // Remove duplicates
   }
 
-  /**
-   * Get state machine statistics
-   */
+  /** Get state machine statistics */
   getStateMachineStats(): {
     totalStates: number;
     totalTransitions: number;
@@ -576,7 +551,7 @@ export class StateMachineService {
     const totalStates = this.config.states.length;
     const totalTransitions = this.config.transitions.length;
     const terminalStates = this.config.states.filter(
-      (s) => s.isTerminal,
+      (s) => s.isTerminal
     ).length;
     const averageTransitionsPerState = totalTransitions / totalStates;
 

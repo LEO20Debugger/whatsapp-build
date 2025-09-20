@@ -15,22 +15,23 @@ export class ConversationSessionService {
 
   constructor(
     private readonly redisService: RedisService,
-    private readonly hybridSessionManager: HybridSessionManager,
+    private readonly hybridSessionManager: HybridSessionManager
   ) {}
 
-  /**
-   * Get conversation session for a phone number
-   */
+  /** Get conversation session for a phone number */
   async getSession(phoneNumber: string): Promise<ConversationSession | null> {
     try {
       // Use hybrid session manager for persistence
       const session = await this.hybridSessionManager.getSession(phoneNumber);
 
       if (session) {
-        this.logger.debug(`Retrieved session for phone number: ${phoneNumber}`, {
-          state: session.currentState,
-          lastActivity: session.lastActivity,
-        });
+        this.logger.debug(
+          `Retrieved session for phone number: ${phoneNumber}`,
+          {
+            state: session.currentState,
+            lastActivity: session.lastActivity,
+          }
+        );
       } else {
         this.logger.debug(`No session found for phone number: ${phoneNumber}`);
       }
@@ -39,18 +40,16 @@ export class ConversationSessionService {
     } catch (error) {
       this.logger.error(
         `Failed to get session for phone number: ${phoneNumber}`,
-        { error: error.message },
+        { error: error.message }
       );
       return null;
     }
   }
 
-  /**
-   * Create or update conversation session
-   */
+  /** Create or update conversation session */
   async setSession(
     session: ConversationSession,
-    options: SessionStorageOptions = {},
+    options: SessionStorageOptions = {}
   ): Promise<boolean> {
     try {
       // Update last activity
@@ -64,11 +63,11 @@ export class ConversationSessionService {
           `Saved session for phone number: ${session.phoneNumber}`,
           {
             state: session.currentState,
-          },
+          }
         );
       } else {
         this.logger.warn(
-          `Failed to save session for phone number: ${session.phoneNumber}`,
+          `Failed to save session for phone number: ${session.phoneNumber}`
         );
       }
 
@@ -76,24 +75,26 @@ export class ConversationSessionService {
     } catch (error) {
       this.logger.error(
         `Failed to set session for phone number: ${session.phoneNumber}`,
-        { error: error.message },
+        { error: error.message }
       );
       return false;
     }
   }
 
-  /**
-   * Create a new conversation session
-   */
+  /** Create a new conversation session */
   async createSession(
     phoneNumber: string,
     initialState: ConversationState = ConversationState.GREETING,
     options: SessionStorageOptions = {},
-    customerId?: string,
+    customerId?: string
   ): Promise<ConversationSession | null> {
     try {
       // Use hybrid session manager for persistence
-      const session = await this.hybridSessionManager.createSession(phoneNumber, initialState, customerId);
+      const session = await this.hybridSessionManager.createSession(
+        phoneNumber,
+        initialState,
+        customerId
+      );
 
       if (session) {
         this.logger.log(
@@ -101,7 +102,7 @@ export class ConversationSessionService {
           {
             initialState,
             customerId,
-          },
+          }
         );
       }
 
@@ -109,26 +110,24 @@ export class ConversationSessionService {
     } catch (error) {
       this.logger.error(
         `Failed to create session for phone number: ${phoneNumber}`,
-        { error: error.message },
+        { error: error.message }
       );
       return null;
     }
   }
 
-  /**
-   * Update conversation state
-   */
+  /** Update conversation state */
   async updateState(
     phoneNumber: string,
     newState: ConversationState,
-    context?: Record<string, any>,
+    context?: Record<string, any>
   ): Promise<boolean> {
     try {
       const session = await this.getSession(phoneNumber);
 
       if (!session) {
         this.logger.warn(
-          `Cannot update state - no session found for phone number: ${phoneNumber}`,
+          `Cannot update state - no session found for phone number: ${phoneNumber}`
         );
         return false;
       }
@@ -154,25 +153,23 @@ export class ConversationSessionService {
     } catch (error) {
       this.logger.error(
         `Failed to update state for phone number: ${phoneNumber}`,
-        { error: error.message },
+        { error: error.message }
       );
       return false;
     }
   }
 
-  /**
-   * Update session context
-   */
+  /** Update session context */
   async updateContext(
     phoneNumber: string,
-    context: Record<string, any>,
+    context: Record<string, any>
   ): Promise<boolean> {
     try {
       const session = await this.getSession(phoneNumber);
 
       if (!session) {
         this.logger.warn(
-          `Cannot update context - no session found for phone number: ${phoneNumber}`,
+          `Cannot update context - no session found for phone number: ${phoneNumber}`
         );
         return false;
       }
@@ -190,24 +187,23 @@ export class ConversationSessionService {
     } catch (error) {
       this.logger.error(
         `Failed to update context for phone number: ${phoneNumber}`,
-        { error: error.message },
+        { error: error.message }
       );
       return false;
     }
   }
 
-  /**
-   * Delete conversation session
-   */
+  /** Delete conversation session */
   async deleteSession(phoneNumber: string): Promise<boolean> {
     try {
-      const success = await this.hybridSessionManager.deleteSession(phoneNumber);
+      const success =
+        await this.hybridSessionManager.deleteSession(phoneNumber);
 
       if (success) {
         this.logger.debug(`Deleted session for phone number: ${phoneNumber}`);
       } else {
         this.logger.warn(
-          `Failed to delete session for phone number: ${phoneNumber}`,
+          `Failed to delete session for phone number: ${phoneNumber}`
         );
       }
 
@@ -215,15 +211,13 @@ export class ConversationSessionService {
     } catch (error) {
       this.logger.error(
         `Failed to delete session for phone number: ${phoneNumber}`,
-        { error: error.message },
+        { error: error.message }
       );
       return false;
     }
   }
 
-  /**
-   * Check if session exists
-   */
+  /** Check if session exists */
   async sessionExists(phoneNumber: string): Promise<boolean> {
     try {
       const key = this.getSessionKey(phoneNumber);
@@ -231,15 +225,13 @@ export class ConversationSessionService {
     } catch (error) {
       this.logger.error(
         `Failed to check session existence for phone number: ${phoneNumber}`,
-        { error: error.message },
+        { error: error.message }
       );
       return false;
     }
   }
 
-  /**
-   * Get session TTL (time to live)
-   */
+  /** Get session TTL (time to live) */
   async getSessionTtl(phoneNumber: string): Promise<number> {
     try {
       const key = this.getSessionKey(phoneNumber);
@@ -252,12 +244,10 @@ export class ConversationSessionService {
     }
   }
 
-  /**
-   * Extend session expiration
-   */
+  /** Extend session expiration */
   async extendSession(
     phoneNumber: string,
-    additionalSeconds: number = 3600,
+    additionalSeconds: number = 3600
   ): Promise<boolean> {
     try {
       const key = this.getSessionKey(phoneNumber);
@@ -265,7 +255,7 @@ export class ConversationSessionService {
 
       if (currentTtl <= 0) {
         this.logger.warn(
-          `Cannot extend session - session not found or expired for phone number: ${phoneNumber}`,
+          `Cannot extend session - session not found or expired for phone number: ${phoneNumber}`
         );
         return false;
       }
@@ -284,15 +274,13 @@ export class ConversationSessionService {
     } catch (error) {
       this.logger.error(
         `Failed to extend session for phone number: ${phoneNumber}`,
-        { error: error.message },
+        { error: error.message }
       );
       return false;
     }
   }
 
-  /**
-   * Get all active sessions (for admin/monitoring purposes)
-   */
+  /** Get all active sessions (for admin/monitoring purposes) */
   async getActiveSessions(): Promise<string[]> {
     try {
       const pattern = `${this.keyPrefix}*`;
@@ -311,9 +299,7 @@ export class ConversationSessionService {
     }
   }
 
-  /**
-   * Clean up expired sessions (manual cleanup if needed)
-   */
+  /** Clean up expired sessions (manual cleanup if needed) */
   async cleanupExpiredSessions(): Promise<number> {
     try {
       const activePhoneNumbers = await this.getActiveSessions();
@@ -344,9 +330,7 @@ export class ConversationSessionService {
     }
   }
 
-  /**
-   * Get session statistics
-   */
+  /** Get session statistics */
   async getSessionStats(): Promise<{
     totalSessions: number;
     sessionsByState: Record<ConversationState, number>;
@@ -386,32 +370,37 @@ export class ConversationSessionService {
     }
   }
 
-  /**
-   * Update session with customer ID
-   */
-  async updateSessionCustomerId(phoneNumber: string, customerId: string): Promise<boolean> {
+  /** Update session with customer ID */
+  async updateSessionCustomerId(
+    phoneNumber: string,
+    customerId: string
+  ): Promise<boolean> {
     try {
-      const success = await this.hybridSessionManager.updateSessionCustomerId(phoneNumber, customerId);
+      const success = await this.hybridSessionManager.updateSessionCustomerId(
+        phoneNumber,
+        customerId
+      );
 
       if (success) {
-        this.logger.debug(`Updated customer ID for phone number: ${phoneNumber}`, {
-          customerId,
-        });
+        this.logger.debug(
+          `Updated customer ID for phone number: ${phoneNumber}`,
+          {
+            customerId,
+          }
+        );
       }
 
       return success;
     } catch (error) {
       this.logger.error(
         `Failed to update customer ID for phone number: ${phoneNumber}`,
-        { error: error.message },
+        { error: error.message }
       );
       return false;
     }
   }
 
-  /**
-   * Generate Redis key for session
-   */
+  /** Generate Redis key for session */
   private getSessionKey(phoneNumber: string): string {
     return `${this.keyPrefix}${phoneNumber}`;
   }

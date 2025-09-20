@@ -42,21 +42,18 @@ export class OrderFlowService {
   constructor(
     private readonly ordersService: OrdersService,
     private readonly productsService: ProductsService,
-    private readonly customersRepository: CustomersRepository,
+    private readonly customersRepository: CustomersRepository
   ) {}
 
-  /**
-   * Add item to cart with validation
-   * Requirements: 1.2, 1.3
-   */
+  /** Add item to cart with validation */
   async addItemToCart(
     session: ConversationSession,
     productId: string,
-    quantity: number,
+    quantity: number
   ): Promise<OrderFlowResult> {
     try {
       this.logger.log(
-        `Adding item to cart: ${productId} x${quantity} for ${session.phoneNumber}`,
+        `Adding item to cart: ${productId} x${quantity} for ${session.phoneNumber}`
       );
 
       // Validate product exists and is available
@@ -71,7 +68,7 @@ export class OrderFlowService {
       // Check stock availability
       const isAvailable = await this.productsService.isProductAvailable(
         productId,
-        quantity,
+        quantity
       );
       if (!isAvailable) {
         return {
@@ -81,24 +78,27 @@ export class OrderFlowService {
       }
 
       // Get current order or create new one
-      let currentOrder = session.context[ContextKey.CURRENT_ORDER] as CurrentOrder;
+      let currentOrder = session.context[
+        ContextKey.CURRENT_ORDER
+      ] as CurrentOrder;
       if (!currentOrder) {
         currentOrder = { items: [] };
       }
 
       // Check if item already exists in cart
       const existingItemIndex = currentOrder.items.findIndex(
-        (item) => item.productId === productId,
+        (item) => item.productId === productId
       );
 
       if (existingItemIndex >= 0) {
         // Update existing item quantity
-        const newQuantity = currentOrder.items[existingItemIndex].quantity + quantity;
-        
+        const newQuantity =
+          currentOrder.items[existingItemIndex].quantity + quantity;
+
         // Validate total quantity
         const totalAvailable = await this.productsService.isProductAvailable(
           productId,
-          newQuantity,
+          newQuantity
         );
         if (!totalAvailable) {
           return {
@@ -129,7 +129,7 @@ export class OrderFlowService {
 
       this.logger.log(
         `Item added to cart successfully for ${session.phoneNumber}`,
-        { productId, quantity, cartTotal: currentOrder.totalAmount },
+        { productId, quantity, cartTotal: currentOrder.totalAmount }
       );
 
       return {
@@ -138,7 +138,7 @@ export class OrderFlowService {
       };
     } catch (error) {
       this.logger.error(
-        `Failed to add item to cart for ${session.phoneNumber}: ${error.message}`,
+        `Failed to add item to cart for ${session.phoneNumber}: ${error.message}`
       );
       return {
         success: false,
@@ -147,22 +147,25 @@ export class OrderFlowService {
     }
   }
 
-  /**
-   * Remove item from cart
-   * Requirements: 1.2, 1.3
-   */
+  /** Remove item from cart */
   async removeItemFromCart(
     session: ConversationSession,
     productId: string,
-    quantityToRemove?: number,
+    quantityToRemove?: number
   ): Promise<OrderFlowResult> {
     try {
       this.logger.log(
-        `Removing item from cart: ${productId} for ${session.phoneNumber}`,
+        `Removing item from cart: ${productId} for ${session.phoneNumber}`
       );
 
-      const currentOrder = session.context[ContextKey.CURRENT_ORDER] as CurrentOrder;
-      if (!currentOrder || !currentOrder.items || currentOrder.items.length === 0) {
+      const currentOrder = session.context[
+        ContextKey.CURRENT_ORDER
+      ] as CurrentOrder;
+      if (
+        !currentOrder ||
+        !currentOrder.items ||
+        currentOrder.items.length === 0
+      ) {
         return {
           success: false,
           error: "Your cart is empty",
@@ -170,7 +173,7 @@ export class OrderFlowService {
       }
 
       const itemIndex = currentOrder.items.findIndex(
-        (item) => item.productId === productId,
+        (item) => item.productId === productId
       );
 
       if (itemIndex === -1) {
@@ -200,7 +203,7 @@ export class OrderFlowService {
 
       this.logger.log(
         `Item removed from cart successfully for ${session.phoneNumber}`,
-        { productId, remainingItems: currentOrder.items.length },
+        { productId, remainingItems: currentOrder.items.length }
       );
 
       return {
@@ -209,7 +212,7 @@ export class OrderFlowService {
       };
     } catch (error) {
       this.logger.error(
-        `Failed to remove item from cart for ${session.phoneNumber}: ${error.message}`,
+        `Failed to remove item from cart for ${session.phoneNumber}: ${error.message}`
       );
       return {
         success: false,
@@ -218,10 +221,7 @@ export class OrderFlowService {
     }
   }
 
-  /**
-   * Clear entire cart
-   * Requirements: 1.2, 1.3
-   */
+  /** Clear entire cart */
   async clearCart(session: ConversationSession): Promise<OrderFlowResult> {
     try {
       this.logger.log(`Clearing cart for ${session.phoneNumber}`);
@@ -242,7 +242,7 @@ export class OrderFlowService {
       };
     } catch (error) {
       this.logger.error(
-        `Failed to clear cart for ${session.phoneNumber}: ${error.message}`,
+        `Failed to clear cart for ${session.phoneNumber}: ${error.message}`
       );
       return {
         success: false,
@@ -251,14 +251,17 @@ export class OrderFlowService {
     }
   }
 
-  /**
-   * Get current cart summary
-   * Requirements: 1.2, 1.3
-   */
+  /** Get current cart summary */
   getCartSummary(session: ConversationSession): CartSummary {
-    const currentOrder = session.context[ContextKey.CURRENT_ORDER] as CurrentOrder;
-    
-    if (!currentOrder || !currentOrder.items || currentOrder.items.length === 0) {
+    const currentOrder = session.context[
+      ContextKey.CURRENT_ORDER
+    ] as CurrentOrder;
+
+    if (
+      !currentOrder ||
+      !currentOrder.items ||
+      currentOrder.items.length === 0
+    ) {
       return {
         items: [],
         itemCount: 0,
@@ -271,10 +274,7 @@ export class OrderFlowService {
     return this.generateCartSummary(currentOrder.items);
   }
 
-  /**
-   * Validate cart before order creation
-   * Requirements: 1.2, 1.5
-   */
+  /** Validate cart before order creation */
   async validateCart(session: ConversationSession): Promise<{
     isValid: boolean;
     errors: string[];
@@ -284,9 +284,15 @@ export class OrderFlowService {
     const warnings: string[] = [];
 
     try {
-      const currentOrder = session.context[ContextKey.CURRENT_ORDER] as CurrentOrder;
-      
-      if (!currentOrder || !currentOrder.items || currentOrder.items.length === 0) {
+      const currentOrder = session.context[
+        ContextKey.CURRENT_ORDER
+      ] as CurrentOrder;
+
+      if (
+        !currentOrder ||
+        !currentOrder.items ||
+        currentOrder.items.length === 0
+      ) {
         errors.push("Cart is empty");
         return { isValid: false, errors, warnings };
       }
@@ -294,8 +300,10 @@ export class OrderFlowService {
       // Validate each item
       for (const item of currentOrder.items) {
         try {
-          const product = await this.productsService.getProductById(item.productId);
-          
+          const product = await this.productsService.getProductById(
+            item.productId
+          );
+
           if (!product.available) {
             errors.push(`${item.name} is no longer available`);
             continue;
@@ -303,12 +311,12 @@ export class OrderFlowService {
 
           const isAvailable = await this.productsService.isProductAvailable(
             item.productId,
-            item.quantity,
+            item.quantity
           );
-          
+
           if (!isAvailable) {
             errors.push(
-              `Insufficient stock for ${item.name}. Requested: ${item.quantity}`,
+              `Insufficient stock for ${item.name}. Requested: ${item.quantity}`
             );
             continue;
           }
@@ -317,7 +325,7 @@ export class OrderFlowService {
           const currentPrice = parseFloat(product.price);
           if (Math.abs(currentPrice - item.price) > 0.01) {
             warnings.push(
-              `Price changed for ${item.name}: was ₦${item.price}, now ₦${currentPrice}`,
+              `Price changed for ${item.name}: was ₦${item.price}, now ₦${currentPrice}`
             );
           }
 
@@ -337,7 +345,7 @@ export class OrderFlowService {
       };
     } catch (error) {
       this.logger.error(
-        `Failed to validate cart for ${session.phoneNumber}: ${error.message}`,
+        `Failed to validate cart for ${session.phoneNumber}: ${error.message}`
       );
       return {
         isValid: false,
@@ -347,13 +355,10 @@ export class OrderFlowService {
     }
   }
 
-  /**
-   * Create order from cart
-   * Requirements: 1.2, 1.5
-   */
+  /** Create order from cart */
   async createOrderFromCart(
     session: ConversationSession,
-    customerId: string,
+    customerId: string
   ): Promise<OrderFlowResult> {
     try {
       this.logger.log(`Creating order from cart for ${session.phoneNumber}`);
@@ -367,7 +372,9 @@ export class OrderFlowService {
         };
       }
 
-      const currentOrder = session.context[ContextKey.CURRENT_ORDER] as CurrentOrder;
+      const currentOrder = session.context[
+        ContextKey.CURRENT_ORDER
+      ] as CurrentOrder;
 
       // Create order request
       const createOrderRequest: CreateOrderRequest = {
@@ -391,7 +398,7 @@ export class OrderFlowService {
           orderId: order.id,
           itemCount: order.items?.length || 0,
           totalAmount: order.totalAmount,
-        },
+        }
       );
 
       return {
@@ -400,7 +407,7 @@ export class OrderFlowService {
       };
     } catch (error) {
       this.logger.error(
-        `Failed to create order from cart for ${session.phoneNumber}: ${error.message}`,
+        `Failed to create order from cart for ${session.phoneNumber}: ${error.message}`
       );
       return {
         success: false,
@@ -409,17 +416,14 @@ export class OrderFlowService {
     }
   }
 
-  /**
-   * Generate formatted cart summary for display
-   * Requirements: 1.2, 1.3
-   */
+  /** Generate formatted cart summary for display */
   formatCartSummary(cartSummary: CartSummary): string {
     if (cartSummary.itemCount === 0) {
       return "🛒 Your cart is empty";
     }
 
     let summary = "🛒 **Your Cart:**\n\n";
-    
+
     cartSummary.items.forEach((item, index) => {
       summary += `${index + 1}. ${item.productName}\n`;
       summary += `   Qty: ${item.quantity} × ₦${item.unitPrice.toFixed(2)} = ₦${item.totalPrice.toFixed(2)}\n\n`;
@@ -434,33 +438,26 @@ export class OrderFlowService {
     return summary;
   }
 
-  /**
-   * Generate order confirmation message
-   * Requirements: 1.5
-   */
+  /** Generate order confirmation message */
   formatOrderConfirmation(orderId: string, cartSummary: CartSummary): string {
     let confirmation = "✅ **Order Confirmed!**\n\n";
     confirmation += `Order ID: ${orderId}\n\n`;
     confirmation += this.formatCartSummary(cartSummary);
     confirmation += "\n\n📞 We'll contact you shortly with payment details.";
-    
+
     return confirmation;
   }
 
-  /**
-   * Calculate total for cart items
-   */
+  /** Calculate total for cart items */
   private calculateCartTotal(items: OrderItem[]): number {
     const subtotal = items.reduce(
       (sum, item) => sum + item.price * item.quantity,
-      0,
+      0
     );
     return Math.round(subtotal * 100) / 100;
   }
 
-  /**
-   * Generate cart summary with tax calculations
-   */
+  /** Generate cart summary with tax calculations */
   private generateCartSummary(items: OrderItem[]): CartSummary {
     const cartItems: CartItem[] = items.map((item) => ({
       productId: item.productId,
