@@ -8,10 +8,10 @@ dotenv.config();
 const postgres = require('postgres');
 
 const testProducts = [
-  {
+{
     name: 'Classic Burger',
     description: 'Juicy beef patty with lettuce, tomato, and our special sauce',
-    price: '12.99',
+    price: '5500.00',
     category: 'Burgers',
     stockQuantity: 50,
     sku: 'BURGER-001',
@@ -20,7 +20,7 @@ const testProducts = [
   {
     name: 'Chicken Wings (6pc)',
     description: 'Crispy chicken wings with your choice of sauce',
-    price: '8.99',
+    price: '3500.00',
     category: 'Appetizers',
     stockQuantity: 30,
     sku: 'WINGS-001',
@@ -29,7 +29,7 @@ const testProducts = [
   {
     name: 'Margherita Pizza',
     description: 'Fresh mozzarella, tomato sauce, and basil',
-    price: '15.99',
+    price: '7500.00',
     category: 'Pizza',
     stockQuantity: 25,
     sku: 'PIZZA-001',
@@ -38,7 +38,7 @@ const testProducts = [
   {
     name: 'Caesar Salad',
     description: 'Crisp romaine lettuce with Caesar dressing and croutons',
-    price: '9.99',
+    price: '4500.00',
     category: 'Salads',
     stockQuantity: 40,
     sku: 'SALAD-001',
@@ -47,7 +47,7 @@ const testProducts = [
   {
     name: 'Chocolate Cake',
     description: 'Rich chocolate cake with chocolate frosting',
-    price: '6.99',
+    price: '2500.00',
     category: 'Desserts',
     stockQuantity: 15,
     sku: 'CAKE-001',
@@ -56,7 +56,7 @@ const testProducts = [
   {
     name: 'Fish & Chips',
     description: 'Beer-battered fish with crispy fries',
-    price: '14.99',
+    price: '6500.00',
     category: 'Main Course',
     stockQuantity: 20,
     sku: 'FISH-001',
@@ -65,7 +65,7 @@ const testProducts = [
   {
     name: 'Soft Drink',
     description: 'Choice of Coke, Pepsi, or Sprite',
-    price: '2.99',
+    price: '800.00',
     category: 'Beverages',
     stockQuantity: 100,
     sku: 'DRINK-001',
@@ -74,12 +74,12 @@ const testProducts = [
   {
     name: 'French Fries',
     description: 'Crispy golden fries with sea salt',
-    price: '4.99',
+    price: '1200.00',
     category: 'Sides',
     stockQuantity: 60,
     sku: 'FRIES-001',
     available: true,
-  }
+  },
 ];
 
 async function seedDatabase() {

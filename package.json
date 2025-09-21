@@ -1,5 +1,5 @@
 {
-  "name": "whatsapp-order-bot",
+  "name": "whatsapp-chat-bot",
   "version": "1.0.0",
   "description": "WhatsApp chatbot for order processing and payment management",
   "main": "dist/main.js",
@@ -39,7 +39,8 @@
     "postgres": "^3.4.4",
     "redis": "^4.7.0",
     "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.2"
+    "rxjs": "^7.8.2",
+    "twilio": "^5.10.0"
   },
   "devDependencies": {
     "@nestjs/cli": "^10.4.5",

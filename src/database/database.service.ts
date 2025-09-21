@@ -1,8 +1,13 @@
-import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { drizzle } from 'drizzle-orm/postgres-js';
-const postgres = require('postgres');
-import * as schema from './schema';
+import {
+  Injectable,
+  OnModuleInit,
+  OnModuleDestroy,
+  Logger,
+} from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import { drizzle } from "drizzle-orm/postgres-js";
+const postgres = require("postgres");
+import * as schema from "./schema";
 
 export interface DatabaseHealthStatus {
   isHealthy: boolean;
@@ -12,8 +17,12 @@ export interface DatabaseHealthStatus {
 }
 
 export interface TransactionOptions {
-  isolationLevel?: 'read uncommitted' | 'read committed' | 'repeatable read' | 'serializable';
-  accessMode?: 'read write' | 'read only';
+  isolationLevel?:
+    | "read uncommitted"
+    | "read committed"
+    | "repeatable read"
+    | "serializable";
+  accessMode?: "read write" | "read only";
   deferrable?: boolean;
 }
 
@@ -38,28 +47,28 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async connect(): Promise<void> {
-    const connectionString = this.configService.get<string>('DATABASE_URL');
-    
+    const connectionString = this.configService.get<string>("DATABASE_URL");
+
     if (!connectionString) {
-      throw new Error('DATABASE_URL is not configured');
+      throw new Error("DATABASE_URL is not configured");
     }
 
-    const isDevelopment = this.configService.get('NODE_ENV') === 'development';
+    const isDevelopment = this.configService.get("NODE_ENV") === "development";
 
     this.client = postgres(connectionString, {
-      max: this.configService.get('DB_POOL_SIZE', 10), // 10 concurrent connections allowed
-      idle_timeout: this.configService.get('DB_IDLE_TIMEOUT', 20), // free idle connections after 20s
-      connect_timeout: this.configService.get('DB_CONNECT_TIMEOUT', 10), // give up if DB doesn’t respond in 10s
+      max: this.configService.get("DB_POOL_SIZE", 10), // 10 concurrent connections allowed
+      idle_timeout: this.configService.get("DB_IDLE_TIMEOUT", 20), // free idle connections after 20s
+      connect_timeout: this.configService.get("DB_CONNECT_TIMEOUT", 10), // give up if DB doesn’t respond in 10s
       prepare: !isDevelopment, // Disable prepared statements in development for better debugging
       onnotice: isDevelopment ? this.logger.debug.bind(this.logger) : undefined,
       debug: isDevelopment,
     });
 
-    this.db = drizzle(this.client, { 
+    this.db = drizzle(this.client, {
       schema,
       logger: isDevelopment,
     });
-    
+
     await this.testConnection();
   }
 
@@ -69,21 +78,23 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         await this.client`SELECT 1 as test`;
         this.isConnected = true;
         this.connectionAttempts = 0;
-        this.logger.log('Database connected successfully');
+        this.logger.log("Database connected successfully");
         return;
       } catch (error) {
         this.connectionAttempts++;
         this.logger.error(
           `Database connection attempt ${this.connectionAttempts}/${this.maxRetries} failed:`,
-          error.message
+          error.message,
         );
 
         if (this.connectionAttempts >= this.maxRetries) {
-          throw new Error(`Failed to connect to database after ${this.maxRetries} attempts: ${error.message}`);
+          throw new Error(
+            `Failed to connect to database after ${this.maxRetries} attempts: ${error.message}`,
+          );
         }
 
         // Wait before retrying
-        await new Promise(resolve => setTimeout(resolve, this.retryDelay));
+        await new Promise((resolve) => setTimeout(resolve, this.retryDelay));
       }
     }
   }
@@ -93,32 +104,32 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       try {
         await this.client.end();
         this.isConnected = false;
-        this.logger.log('Database disconnected successfully');
+        this.logger.log("Database disconnected successfully");
       } catch (error) {
-        this.logger.error('Error disconnecting from database:', error.message);
+        this.logger.error("Error disconnecting from database:", error.message);
       }
     }
   }
 
   async healthCheck(): Promise<DatabaseHealthStatus> {
     const lastChecked = new Date();
-    
+
     try {
       if (!this.isConnected) {
         return {
           isHealthy: false,
           lastChecked,
-          error: 'Database not connected'
+          error: "Database not connected",
         };
       }
 
       // Test query with timeout
-      const result = await Promise.race([
+      const result = (await Promise.race([
         this.client`SELECT 1 as health_check, current_timestamp as server_time`,
-        new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Health check timeout')), 5000)
-        )
-      ]) as any[];
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("Health check timeout")), 5000),
+        ),
+      ])) as any[];
 
       return {
         isHealthy: true,
@@ -126,11 +137,11 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         connectionCount: this.client.options.max,
       };
     } catch (error) {
-      this.logger.error('Database health check failed:', error.message);
+      this.logger.error("Database health check failed:", error.message);
       return {
         isHealthy: false,
         lastChecked,
-        error: error.message
+        error: error.message,
       };
     }
   }
@@ -156,19 +167,19 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         idleConnections: parseInt(result[0].idle_connections),
       };
     } catch (error) {
-      this.logger.error('Failed to get connection info:', error.message);
+      this.logger.error("Failed to get connection info:", error.message);
       throw error;
     }
   }
 
   async transaction<T>(
     callback: (tx: any) => Promise<T>,
-    options?: TransactionOptions
+    options?: TransactionOptions,
   ): Promise<T> {
     try {
       return await this.db.transaction(callback, options);
     } catch (error) {
-      this.logger.error('Transaction failed:', error.message);
+      this.logger.error("Transaction failed:", error.message);
       throw error;
     }
   }
@@ -180,7 +191,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       }
       return await this.client.unsafe(query);
     } catch (error) {
-      this.logger.error('Raw query execution failed:', error.message);
+      this.logger.error("Raw query execution failed:", error.message);
       throw error;
     }
   }
@@ -191,7 +202,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
 
   getClient(): any {
     if (!this.isConnected) {
-      throw new Error('Database is not connected');
+      throw new Error("Database is not connected");
     }
     return this.client;
   }
