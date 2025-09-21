@@ -36,7 +36,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
 
     if (!redisHost) {
       this.logger.warn(
-        "Redis not configured - queue and session features will be disabled",
+        "Redis not configured - queue and session features will be disabled"
       );
       return;
     }
@@ -95,7 +95,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     this.client.on("reconnecting", (delay) => {
       this.reconnectAttempts++;
       this.logger.log(
-        `Redis reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})`,
+        `Redis reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})`
       );
     });
 
@@ -110,7 +110,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
 
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
       this.logger.error(
-        `Redis connection failed after ${this.maxReconnectAttempts} attempts. Giving up.`,
+        `Redis connection failed after ${this.maxReconnectAttempts} attempts. Giving up.`
       );
       this.client = null;
       return;
@@ -118,10 +118,10 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
 
     const delay = Math.min(
       this.reconnectDelay * Math.pow(2, this.reconnectAttempts),
-      30000,
+      30000
     );
     this.logger.warn(
-      `Redis connection failed: ${error.message}. Retrying in ${delay}ms...`,
+      `Redis connection failed: ${error.message}. Retrying in ${delay}ms...`
     );
 
     setTimeout(async () => {
@@ -153,7 +153,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
         return true;
       },
       "set",
-      { key, ttl },
+      { key, ttl }
     );
   }
 
@@ -167,7 +167,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
         return await this.client.get(key);
       },
       "get",
-      { key },
+      { key }
     );
   }
 
@@ -182,7 +182,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
         return result > 0;
       },
       "del",
-      { key },
+      { key }
     );
   }
 
@@ -197,7 +197,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
         return result === 1;
       },
       "exists",
-      { key },
+      { key }
     );
   }
 
@@ -212,7 +212,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
         return result === 1;
       },
       "expire",
-      { key, seconds },
+      { key, seconds }
     );
   }
 
@@ -226,7 +226,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
         return await this.client.ttl(key);
       },
       "ttl",
-      { key },
+      { key }
     );
   }
 
@@ -240,7 +240,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
         return await this.client.keys(pattern);
       },
       "keys",
-      { pattern },
+      { pattern }
     );
   }
 
@@ -255,7 +255,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
         return true;
       },
       "flushdb",
-      {},
+      {}
     );
   }
 
@@ -263,7 +263,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     operation: () => Promise<T>,
     operationName: string,
     params: Record<string, any>,
-    maxRetries: number = 3,
+    maxRetries: number = 3
   ): Promise<T> {
     let lastError: Error;
 
@@ -275,7 +275,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
         if (attempt > 1) {
           this.logger.log(
             `Redis ${operationName} succeeded on attempt ${attempt}`,
-            { params },
+            { params }
           );
         }
 
@@ -285,7 +285,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
 
         this.logger.warn(
           `Redis ${operationName} failed on attempt ${attempt}/${maxRetries}: ${error.message}`,
-          { params, attempt, error: error.message },
+          { params, attempt, error: error.message }
         );
 
         // If this is the last attempt, don't wait
@@ -302,7 +302,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     // All retries failed
     this.logger.error(
       `Redis ${operationName} failed after ${maxRetries} attempts: ${lastError.message}`,
-      { params, error: lastError.message },
+      { params, error: lastError.message }
     );
 
     // Return default values for failed operations

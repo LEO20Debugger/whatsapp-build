@@ -10,12 +10,12 @@ async function bootstrap() {
       whitelist: true,
       forbidNonWhitelisted: true,
       transform: true,
-    }),
+    })
   );
 
   const port = process.env.PORT || 4040;
   await app.listen(port);
-  console.log(`WhatsApp Chat Bot is running on port ${port} 🚀`);
+  console.log(`WhatsApp Chat Bot is running on port ${port} ⚡`);
 }
 
 bootstrap();
