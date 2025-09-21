@@ -16,7 +16,7 @@ import {
 @Injectable()
 export class HybridSessionManager {
   private readonly logger = new Logger(HybridSessionManager.name);
-  private readonly defaultTtl = 3600; // 1 hour in seconds
+  private readonly defaultTtl = 600; // 10 minutes
   private readonly keyPrefix = "conversation:session:";
   private readonly maxRetryAttempts = 3;
   private readonly retryDelay = 1000; // 1 second
@@ -26,56 +26,81 @@ export class HybridSessionManager {
     private readonly sessionRepository: ConversationSessionRepository
   ) {}
 
-  /** Get session with write-through caching strategy */
-  async getSession(phoneNumber: string): Promise<ConversationSession | null> {
+  /** Get session with write-through caching strategy and auto-create if expired */
+  async getSession(phoneNumber: string): Promise<ConversationSession> {
     try {
       this.logger.debug(`Getting session for phone number: ${phoneNumber}`);
 
-      // Try Redis first for performance
-      const redisSession = await this.getSessionFromRedis(phoneNumber);
-      if (redisSession) {
-        this.logger.debug(`Session found in Redis for: ${phoneNumber}`);
-        return redisSession;
+      // Try Redis first
+      let session = await this.getSessionFromRedis(phoneNumber);
+      if (session) {
+        if (this.isExpired(session)) {
+          this.logger.debug(
+            `Redis session expired for phone number: ${phoneNumber}`
+          );
+          await this.deleteSession(phoneNumber); // Remove expired session
+          session = null;
+        } else {
+          this.logger.debug(
+            `Session retrieved from Redis for phone number: ${phoneNumber}`,
+            {
+              lastActivity: session.lastActivity,
+              state: session.currentState,
+            }
+          );
+          return session;
+        }
       }
 
       // Fallback to database
-      this.logger.debug(
-        `Session not in Redis, checking database for: ${phoneNumber}`
-      );
-      const dbSession = await this.getSessionFromDatabase(phoneNumber);
-      if (dbSession) {
-        const conversationSession =
-          this.convertDbSessionToConversationSession(dbSession);
-        // Restore to Redis for future requests
-        await this.saveSessionToRedis(conversationSession);
-        this.logger.debug(
-          `Session restored from database to Redis for: ${phoneNumber}`
-        );
-        return conversationSession;
+      if (!session) {
+        const dbSession = await this.getSessionFromDatabase(phoneNumber);
+        if (
+          dbSession &&
+          (!dbSession.expiresAt || new Date() <= dbSession.expiresAt)
+        ) {
+          session = this.convertDbSessionToConversationSession(dbSession);
+          await this.saveSessionToRedis(session);
+          this.logger.debug(
+            `Session restored from database to Redis for phone number: ${phoneNumber}`,
+            {
+              lastActivity: session.lastActivity,
+              state: session.currentState,
+            }
+          );
+          return session;
+        } else if (dbSession) {
+          this.logger.debug(
+            `Database session expired for phone number: ${phoneNumber}`
+          );
+          await this.deleteSession(phoneNumber);
+        }
       }
 
-      this.logger.debug(`No session found for phone number: ${phoneNumber}`);
-      return null;
+      // Auto-create session if not found or expired
+      session = await this.createSession(phoneNumber);
+      this.logger.log(
+        `Auto-created new session for phone number: ${phoneNumber}`
+      );
+      return session;
     } catch (error) {
       this.logger.error(
         `Failed to get session for ${phoneNumber}: ${error.message}`
       );
 
-      // If Redis fails, try database only
-      if (error.message.includes("Redis")) {
-        try {
-          const dbSession = await this.getSessionFromDatabase(phoneNumber);
-          return dbSession
-            ? this.convertDbSessionToConversationSession(dbSession)
-            : null;
-        } catch (dbError) {
-          this.logger.error(
-            `Database fallback also failed for ${phoneNumber}: ${dbError.message}`
-          );
-        }
+      // Fallback to database if Redis fails
+      try {
+        const dbSession = await this.getSessionFromDatabase(phoneNumber);
+        if (dbSession)
+          return this.convertDbSessionToConversationSession(dbSession);
+      } catch (dbError) {
+        this.logger.error(
+          `Database fallback also failed for ${phoneNumber}: ${dbError.message}`
+        );
       }
 
-      return null;
+      // As last resort, create a new session
+      return await this.createSession(phoneNumber);
     }
   }
 
@@ -190,24 +215,27 @@ export class HybridSessionManager {
     try {
       this.logger.debug(`Updating customer ID for session: ${phoneNumber}`);
 
-      // Update database first (source of truth)
       const dbSession = await this.getSessionFromDatabase(phoneNumber);
-      if (dbSession) {
-        const updates: any = {
-          customerId,
-        };
-
-        await this.sessionRepository.update(dbSession.id, updates);
-        this.logger.debug(
-          `Successfully updated customer ID for session: ${phoneNumber}`
-        );
-        return true;
-      } else {
+      if (!dbSession) {
         this.logger.warn(
           `No session found in database for phone number: ${phoneNumber}`
         );
         return false;
       }
+
+      await this.sessionRepository.update(dbSession.id, { customerId });
+
+      // Also update Redis if session exists
+      const redisSession = await this.getSessionFromRedis(phoneNumber);
+      if (redisSession) {
+        redisSession.customerId = customerId;
+        await this.saveSessionToRedis(redisSession);
+      }
+
+      this.logger.debug(
+        `Successfully updated customer ID for session: ${phoneNumber}`
+      );
+      return true;
     } catch (error) {
       this.logger.error(
         `Failed to update customer ID for ${phoneNumber}: ${error.message}`
@@ -291,65 +319,39 @@ export class HybridSessionManager {
 
   /** Sync active sessions from Redis to database */
   async syncActiveSessionsToDatabase(): Promise<number> {
-    try {
-      this.logger.log("Starting sync of active sessions to database");
+    if (!this.redisService.isRedisAvailable()) return 0;
 
-      if (!this.redisService.isRedisAvailable()) {
-        this.logger.warn("Redis not available, cannot sync sessions");
-        return 0;
+    const keys = await this.redisService.keys(`${this.keyPrefix}*`);
+    let syncedCount = 0;
+
+    for (const key of keys) {
+      const phoneNumber = key.replace(this.keyPrefix, "");
+      const redisSession = await this.getSessionFromRedis(phoneNumber);
+      if (!redisSession || this.isExpired(redisSession)) continue;
+
+      const dbSession = await this.getSessionFromDatabase(phoneNumber);
+      const updates: UpdateConversationSession = {
+        context: redisSession.context,
+        lastActivity: redisSession.lastActivity,
+        expiresAt: new Date(
+          redisSession.lastActivity.getTime() + this.defaultTtl * 1000
+        ),
+      };
+
+      if (dbSession) {
+        await this.sessionRepository.update(dbSession.id, updates);
+      } else {
+        await this.sessionRepository.create({
+          phoneNumber,
+          expiresAt: updates.expiresAt,
+        });
       }
 
-      const pattern = `${this.keyPrefix}*`;
-      const keys = await this.redisService.keys(pattern);
-      let syncedCount = 0;
-
-      for (const key of keys) {
-        try {
-          const phoneNumber = key.replace(this.keyPrefix, "");
-          const redisSession = await this.getSessionFromRedis(phoneNumber);
-
-          if (redisSession) {
-            // Check if session exists in database
-            const dbSession = await this.getSessionFromDatabase(phoneNumber);
-
-            if (dbSession) {
-              // Update existing session
-              const updates: UpdateConversationSession = {
-                context: redisSession.context,
-                lastActivity: redisSession.lastActivity,
-                expiresAt: new Date(
-                  redisSession.lastActivity.getTime() + this.defaultTtl * 1000
-                ),
-              };
-              await this.sessionRepository.update(dbSession.id, updates);
-            } else {
-              // Create new session in database
-              const dbSessionData = {
-                phoneNumber: redisSession.phoneNumber,
-                expiresAt: new Date(
-                  redisSession.lastActivity.getTime() + this.defaultTtl * 1000
-                ),
-              };
-              await this.sessionRepository.create(dbSessionData);
-            }
-
-            syncedCount++;
-          }
-        } catch (error) {
-          this.logger.warn(
-            `Failed to sync session for key ${key}: ${error.message}`
-          );
-        }
-      }
-
-      this.logger.log(
-        `Successfully synced ${syncedCount} sessions to database`
-      );
-      return syncedCount;
-    } catch (error) {
-      this.logger.error(`Failed to sync active sessions: ${error.message}`);
-      return 0;
+      syncedCount++;
     }
+
+    this.logger.log(`Successfully synced ${syncedCount} active sessions to DB`);
+    return syncedCount;
   }
 
   /** Get session history from database */
@@ -439,6 +441,11 @@ export class HybridSessionManager {
       );
       return false;
     }
+  }
+
+  /** Check if a session is expired based on last activity and TTL */
+  private isExpired(session: ConversationSession): boolean {
+    return session.lastActivity.getTime() + this.defaultTtl * 1000 < Date.now();
   }
 
   private async getSessionFromDatabase(

@@ -10,7 +10,7 @@ import {
 @Injectable()
 export class ConversationSessionService {
   private readonly logger = new Logger(ConversationSessionService.name);
-  private readonly defaultTtl = 3600; // 1 hour in seconds
+  private readonly defaultTtl = 600; // 10 minutes
   private readonly keyPrefix = "conversation:session:";
 
   constructor(

@@ -37,7 +37,7 @@ export interface OrderFlowResult {
 @Injectable()
 export class OrderFlowService {
   private readonly logger = new Logger(OrderFlowService.name);
-  private readonly TAX_RATE = 0.1; // 10% tax rate
+  private readonly TAX_RATE = 0.002; // 2% tax rate
 
   constructor(
     private readonly ordersService: OrdersService,
@@ -274,6 +274,29 @@ export class OrderFlowService {
     return this.generateCartSummary(currentOrder.items);
   }
 
+  /** chekout current cart summary */
+  checkoutCartSummary(session: ConversationSession): CartSummary {
+    const currentOrder = session.context[
+      ContextKey.CURRENT_ORDER
+    ] as CurrentOrder;
+
+    if (
+      !currentOrder ||
+      !currentOrder.items ||
+      currentOrder.items.length === 0
+    ) {
+      return {
+        items: [],
+        itemCount: 0,
+        subtotal: 0,
+        tax: 0,
+        total: 0,
+      };
+    }
+
+    return this.generateCartSummary(currentOrder.items, true);
+  }
+
   /** Validate cart before order creation */
   async validateCart(session: ConversationSession): Promise<{
     isValid: boolean;
@@ -458,7 +481,33 @@ export class OrderFlowService {
   }
 
   /** Generate cart summary with tax calculations */
-  private generateCartSummary(items: OrderItem[]): CartSummary {
+  // private generateCartSummary(items: OrderItem[]): CartSummary {
+  //   const cartItems: CartItem[] = items.map((item) => ({
+  //     productId: item.productId,
+  //     productName: item.name,
+  //     quantity: item.quantity,
+  //     unitPrice: item.price,
+  //     totalPrice: item.price * item.quantity,
+  //   }));
+
+  //   const subtotal = cartItems.reduce((sum, item) => sum + item.totalPrice, 0);
+  //   const tax = subtotal * this.TAX_RATE;
+  //   const total = subtotal + tax;
+
+  //   return {
+  //     items: cartItems,
+  //     itemCount: cartItems.reduce((sum, item) => sum + item.quantity, 0),
+  //     subtotal: Math.round(subtotal * 100) / 100,
+  //     tax: Math.round(tax * 100) / 100,
+  //     total: Math.round(total * 100) / 100,
+  //   };
+  // }
+
+  /** Generate cart summary with optional tax */
+  private generateCartSummary(
+    items: OrderItem[],
+    includeTax = false
+  ): CartSummary {
     const cartItems: CartItem[] = items.map((item) => ({
       productId: item.productId,
       productName: item.name,
@@ -468,7 +517,7 @@ export class OrderFlowService {
     }));
 
     const subtotal = cartItems.reduce((sum, item) => sum + item.totalPrice, 0);
-    const tax = subtotal * this.TAX_RATE;
+    const tax = includeTax ? subtotal * this.TAX_RATE : 0;
     const total = subtotal + tax;
 
     return {
