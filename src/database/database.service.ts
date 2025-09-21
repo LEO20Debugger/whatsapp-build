@@ -78,18 +78,18 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         await this.client`SELECT 1 as test`;
         this.isConnected = true;
         this.connectionAttempts = 0;
-        this.logger.log("Database connected successfully");
+        this.logger.log("Database connected successfully 🚀");
         return;
       } catch (error) {
         this.connectionAttempts++;
         this.logger.error(
           `Database connection attempt ${this.connectionAttempts}/${this.maxRetries} failed:`,
-          error.message,
+          error.message
         );
 
         if (this.connectionAttempts >= this.maxRetries) {
           throw new Error(
-            `Failed to connect to database after ${this.maxRetries} attempts: ${error.message}`,
+            `Failed to connect to database after ${this.maxRetries} attempts: ${error.message}`
           );
         }
 
@@ -127,7 +127,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       const result = (await Promise.race([
         this.client`SELECT 1 as health_check, current_timestamp as server_time`,
         new Promise((_, reject) =>
-          setTimeout(() => reject(new Error("Health check timeout")), 5000),
+          setTimeout(() => reject(new Error("Health check timeout")), 5000)
         ),
       ])) as any[];
 
@@ -174,7 +174,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
 
   async transaction<T>(
     callback: (tx: any) => Promise<T>,
-    options?: TransactionOptions,
+    options?: TransactionOptions
   ): Promise<T> {
     try {
       return await this.db.transaction(callback, options);

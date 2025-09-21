@@ -33,6 +33,7 @@ export interface ConversationSession {
   currentOrder?: CurrentOrder;
   lastActivity: Date;
   context: Record<string, any>;
+  customerId?: string;
 }
 
 export interface SessionStorageOptions {

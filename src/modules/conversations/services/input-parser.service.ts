@@ -14,12 +14,10 @@ import { StateTrigger } from "../types/state-machine.types";
 export class InputParserService {
   private readonly logger = new Logger(InputParserService.name);
 
-  /**
-   * Parse user input and extract intent and entities
-   */
+  /** Parse user input and extract intent and entities */
   async parseInput(
     input: string,
-    context: ParsingContext,
+    context: ParsingContext
   ): Promise<ParsedInput> {
     try {
       const sanitizedInput = this.sanitizeInput(input);
@@ -27,7 +25,7 @@ export class InputParserService {
       const entities = this.extractEntities(sanitizedInput, intent);
       const trigger = this.mapIntentToTrigger(
         intent,
-        context.currentState as ConversationState,
+        context.currentState as ConversationState
       );
 
       const parsedInput: ParsedInput = {
@@ -62,9 +60,7 @@ export class InputParserService {
     }
   }
 
-  /**
-   * Sanitize user input
-   */
+  /** Sanitize user input */
   private sanitizeInput(input: string): string {
     return input
       .trim()
@@ -294,9 +290,7 @@ export class InputParserService {
     return UserIntent.UNKNOWN;
   }
 
-  /**
-   * Extract entities from input
-   */
+  /** Extract entities from input */
   private extractEntities(input: string, intent: UserIntent): InputEntity[] {
     const entities: InputEntity[] = [];
 
@@ -405,7 +399,7 @@ export class InputParserService {
             (word) =>
               word.length > 2 &&
               !commonWords.includes(word) &&
-              !/^\d+$/.test(word),
+              !/^\d+$/.test(word)
           );
 
         if (words.length > 0) {
@@ -420,7 +414,7 @@ export class InputParserService {
 
     // Extract phone numbers
     const phoneMatches = input.match(
-      /(\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/g,
+      /(\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/g
     );
     if (phoneMatches) {
       phoneMatches.forEach((phone) => {
@@ -464,12 +458,10 @@ export class InputParserService {
     return entities;
   }
 
-  /**
-   * Map intent to state machine trigger
-   */
+  /** Map intent to state machine trigger */
   private mapIntentToTrigger(
     intent: UserIntent,
-    currentState: ConversationState,
+    currentState: ConversationState
   ): StateTrigger | undefined {
     const intentToTriggerMap: Record<UserIntent, StateTrigger> = {
       [UserIntent.START_CONVERSATION]: StateTrigger.START_CONVERSATION,
@@ -500,11 +492,9 @@ export class InputParserService {
     return intentToTriggerMap[intent];
   }
 
-  /**
-   * Get contextual trigger for "yes" responses
-   */
+  /** Get contextual trigger for "yes" responses */
   private getContextualYesTrigger(
-    currentState: ConversationState,
+    currentState: ConversationState
   ): StateTrigger {
     switch (currentState) {
       case ConversationState.REVIEWING_ORDER:
@@ -518,11 +508,9 @@ export class InputParserService {
     }
   }
 
-  /**
-   * Get contextual trigger for "no" responses
-   */
+  /** Get contextual trigger for "no" responses */
   private getContextualNoTrigger(
-    currentState: ConversationState,
+    currentState: ConversationState
   ): StateTrigger {
     switch (currentState) {
       case ConversationState.REVIEWING_ORDER:
@@ -536,25 +524,21 @@ export class InputParserService {
     }
   }
 
-  /**
-   * Check if input matches any of the given patterns
-   */
+  /** Check if input matches any of the given patterns */
   private matchesPatterns(input: string, patterns: string[]): boolean {
     return patterns.some(
       (pattern) =>
         input.includes(pattern) ||
         input.startsWith(pattern) ||
-        new RegExp(`\\b${pattern}\\b`).test(input),
+        new RegExp(`\\b${pattern}\\b`).test(input)
     );
   }
 
-  /**
-   * Calculate confidence score for parsed input
-   */
+  /** Calculate confidence score for parsed input */
   private calculateConfidence(
     intent: UserIntent,
     entities: InputEntity[],
-    input: string,
+    input: string
   ): number {
     let confidence = 0.5; // Base confidence
 
@@ -580,9 +564,7 @@ export class InputParserService {
     return Math.min(confidence, 1.0);
   }
 
-  /**
-   * Validate user input
-   */
+  /** Validate user input */
   validateInput(input: string): InputValidationResult {
     const errors: string[] = [];
 
@@ -611,19 +593,15 @@ export class InputParserService {
     };
   }
 
-  /**
-   * Get entity by type
-   */
+  /** Get entity by type */
   getEntityByType(
     entities: InputEntity[],
-    type: EntityType,
+    type: EntityType
   ): InputEntity | undefined {
     return entities.find((entity) => entity.type === type);
   }
 
-  /**
-   * Get all entities by type
-   */
+  /** Get all entities by type */
   getEntitiesByType(entities: InputEntity[], type: EntityType): InputEntity[] {
     return entities.filter((entity) => entity.type === type);
   }
