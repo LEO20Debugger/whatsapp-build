@@ -1,8 +1,6 @@
 import { StateTrigger } from "./state-machine.types";
 
-/**
- * Parsed user input with intent and entities
- */
+/** Parsed user input with intent and entities */
 export interface ParsedInput {
   originalText: string;
   intent: UserIntent;
@@ -11,9 +9,7 @@ export interface ParsedInput {
   trigger?: StateTrigger;
 }
 
-/**
- * User intents that can be detected from messages
- */
+/** User intents that can be detected from messages */
 export enum UserIntent {
   // Navigation intents
   START_CONVERSATION = "start_conversation",
@@ -49,9 +45,7 @@ export enum UserIntent {
   UNKNOWN = "unknown",
 }
 
-/**
- * Entities extracted from user input
- */
+/** Entities extracted from user input */
 export interface InputEntity {
   type: EntityType;
   value: string;
@@ -60,9 +54,7 @@ export interface InputEntity {
   endIndex?: number;
 }
 
-/**
- * Types of entities that can be extracted
- */
+/** Types of entities that can be extracted */
 export enum EntityType {
   PRODUCT_NAME = "product_name",
   PRODUCT_ID = "product_id",
@@ -73,18 +65,14 @@ export enum EntityType {
   CUSTOMER_NAME = "customer_name",
 }
 
-/**
- * Input validation result
- */
+/** Input validation result */
 export interface InputValidationResult {
   isValid: boolean;
   errors: string[];
   sanitizedInput?: string;
 }
 
-/**
- * Context for input parsing
- */
+/** Context for input parsing */
 export interface ParsingContext {
   currentState: string;
   previousMessages: string[];

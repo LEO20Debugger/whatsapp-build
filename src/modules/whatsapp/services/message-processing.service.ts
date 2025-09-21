@@ -23,9 +23,7 @@ export class MessageProcessingService {
     private readonly messageLoggingService: MessageLoggingService,
   ) {}
 
-  /**
-   * Main entry point for processing incoming WhatsApp messages
-   */
+  /** Main entry point for processing incoming WhatsApp messages */
   async processMessage(
     message: IncomingMessage,
   ): Promise<MessageProcessingResult> {
@@ -134,9 +132,7 @@ export class MessageProcessingService {
     }
   }
 
-  /**
-   * Parse incoming WhatsApp message into standardized format
-   */
+  /** Parse incoming WhatsApp message into standardized format */
   private parseIncomingMessage(message: IncomingMessage): ParsedMessage | null {
     try {
       // Validate required fields
@@ -189,9 +185,7 @@ export class MessageProcessingService {
     }
   }
 
-  /**
-   * Route parsed message to conversation flow service
-   */
+  /** Route parsed message to conversation flow service */
   private async routeToConversationFlow(
     parsedMessage: ParsedMessage,
     processingContext: MessageProcessingContext,
@@ -224,9 +218,7 @@ export class MessageProcessingService {
     }
   }
 
-  /**
-   * Handle non-text messages (images, documents, etc.)
-   */
+  /** Handle non-text messages (images, documents, etc.) */
   private handleNonTextMessage(parsedMessage: ParsedMessage): BotResponse {
     switch (parsedMessage.type) {
       case MessageType.IMAGE:
@@ -255,9 +247,7 @@ export class MessageProcessingService {
     }
   }
 
-  /**
-   * Send response back to user via WhatsApp
-   */
+  /** Send response back to user via WhatsApp */
   private async sendResponse(
     phoneNumber: string,
     response: BotResponse,
@@ -303,9 +293,7 @@ export class MessageProcessingService {
     }
   }
 
-  /**
-   * Send error response to user
-   */
+  /** Send error response to user */
   private async sendErrorResponse(
     phoneNumber: string,
     errorMessage: string,
@@ -345,9 +333,7 @@ export class MessageProcessingService {
     }
   }
 
-  /**
-   * Handle processing errors with appropriate user feedback
-   */
+  /** Handle processing errors with appropriate user feedback */
   private async handleProcessingError(
     phoneNumber: string,
     error: any,
@@ -365,9 +351,7 @@ export class MessageProcessingService {
     await this.sendErrorResponse(phoneNumber, errorMessage);
   }
 
-  /**
-   * Map WhatsApp message types to internal message types
-   */
+  /** Map WhatsApp message types to internal message types */
   private mapWhatsAppTypeToMessageType(whatsappType: string): MessageType {
     switch (whatsappType.toLowerCase()) {
       case "text":
@@ -385,9 +369,7 @@ export class MessageProcessingService {
     }
   }
 
-  /**
-   * Validate message structure before processing
-   */
+  /** Validate message structure before processing */
   private validateMessageStructure(message: IncomingMessage): ValidationResult {
     const result: ValidationResult = {
       isValid: true,
@@ -408,9 +390,7 @@ export class MessageProcessingService {
     return result;
   }
 
-  /**
-   * Validate message content for security and format
-   */
+  /** Validate message content for security and format */
   private validateMessageContent(content: string): ValidationResult {
     const result: ValidationResult = {
       isValid: true,
@@ -433,16 +413,12 @@ export class MessageProcessingService {
     return result;
   }
 
-  /**
-   * Get user-friendly error message for structure validation errors
-   */
+  /** Get user-friendly error message for structure validation errors */
   private getStructureErrorMessage(errors: string[]): string {
     return "There was an issue with your message. Please try sending it again.";
   }
 
-  /**
-   * Get user-friendly error message for content validation errors
-   */
+  /** Get user-friendly error message for content validation errors */
   private getContentErrorMessage(errors: string[]): string {
     if (errors.includes("Message content is empty")) {
       return "Your message appears to be empty. Please send a message with some text.";
@@ -453,9 +429,7 @@ export class MessageProcessingService {
     return "There was an issue with your message content. Please try rephrasing and sending again.";
   }
 
-  /**
-   * Create processing result for tracking and debugging
-   */
+  /** Create processing result for tracking and debugging */
   private createProcessingResult(
     context: MessageProcessingContext,
     success: boolean,
@@ -475,9 +449,7 @@ export class MessageProcessingService {
     };
   }
 
-  /**
-   * Log inbound message from customer
-   */
+  /** Log inbound message from customer */
   private async logInboundMessage(parsedMessage: ParsedMessage): Promise<void> {
     try {
       // Get current session to capture conversation state
@@ -496,9 +468,7 @@ export class MessageProcessingService {
     }
   }
 
-  /**
-   * Log outbound message to customer
-   */
+  /** Log outbound message to customer */
   private async logOutboundMessage(
     phoneNumber: string,
     content: string,
