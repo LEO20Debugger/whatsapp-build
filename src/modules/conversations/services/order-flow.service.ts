@@ -2,6 +2,7 @@ import { Injectable, Logger } from "@nestjs/common";
 import { OrdersService, CreateOrderRequest } from "../../orders/orders.service";
 import { ProductsService } from "../../products/products.service";
 import { CustomersRepository } from "../../customers/customers.repository";
+import { ConversationSessionService } from "../../conversations/services/conversation-session.service";
 import {
   ConversationSession,
   CurrentOrder,
@@ -42,7 +43,8 @@ export class OrderFlowService {
   constructor(
     private readonly ordersService: OrdersService,
     private readonly productsService: ProductsService,
-    private readonly customersRepository: CustomersRepository
+    private readonly customersRepository: CustomersRepository,
+    private readonly sessionService: ConversationSessionService
   ) {}
 
   /** Add item to cart with validation */
@@ -161,6 +163,7 @@ export class OrderFlowService {
       const currentOrder = session.context[
         ContextKey.CURRENT_ORDER
       ] as CurrentOrder;
+
       if (
         !currentOrder ||
         !currentOrder.items ||
@@ -199,6 +202,9 @@ export class OrderFlowService {
       // Update session context
       session.context[ContextKey.CURRENT_ORDER] = currentOrder;
 
+      // ✅ Persist session
+      await this.sessionService.setSession(session);
+
       const cartSummary = this.generateCartSummary(currentOrder.items);
 
       this.logger.log(
@@ -221,14 +227,27 @@ export class OrderFlowService {
     }
   }
 
-  /** Clear entire cart */
+  /** clear cart summary */
   async clearCart(session: ConversationSession): Promise<OrderFlowResult> {
     try {
       this.logger.log(`Clearing cart for ${session.phoneNumber}`);
 
-      // Clear cart from session
-      delete session.context[ContextKey.CURRENT_ORDER];
-      delete session.context[ContextKey.SELECTED_PRODUCTS];
+      // Reset cart
+      session.context = {
+        ...session.context,
+        [ContextKey.CURRENT_ORDER]: {
+          items: [],
+          itemCount: 0,
+          subtotal: 0,
+          tax: 0,
+          total: 0,
+        },
+        [ContextKey.SELECTED_PRODUCTS]: [],
+      };
+
+      // Save updated session back
+      // Persist updated session via ConversationSessionService
+      await this.sessionService.setSession(session);
 
       return {
         success: true,
