@@ -9,6 +9,9 @@ import {
   messageLogs,
 } from "./schema";
 
+// 🔎 Temporary check
+// type DebugSession = InferInsertModel<typeof conversationSessions>;
+
 // Select types (for reading from database)
 export type Customer = InferSelectModel<typeof customers>;
 export type Product = InferSelectModel<typeof products>;
@@ -77,7 +80,13 @@ export type CustomerWithOrders = Customer & {
 };
 
 // Conversation-specific types for repositories
-export type CreateConversationSession = Omit<NewConversationSession, "id" | "createdAt" | "updatedAt">;
+// export type CreateConversationSession = Omit<NewConversationSession, "id" | "createdAt" | "updatedAt">;
+export type CreateConversationSession = NewConversationSession & {
+  customerId?: string;
+  currentState?: string;
+  context?: Record<string, any>;
+  lastActivity?: Date;
+};
 export type CreateMessageLog = Omit<NewMessageLog, "id" | "createdAt">;
 
 // Enhanced conversation session with computed fields for analytics
@@ -178,23 +187,36 @@ export interface ConversationSessionRepository {
   create(session: CreateConversationSession): Promise<ConversationSession>;
   findByPhoneNumber(phoneNumber: string): Promise<ConversationSession | null>;
   findById(id: string): Promise<ConversationSession | null>;
-  update(id: string, updates: UpdateConversationSession): Promise<ConversationSession>;
+  update(
+    id: string,
+    updates: UpdateConversationSession
+  ): Promise<ConversationSession>;
   delete(id: string): Promise<boolean>;
-  
+
   // Analytics queries
   findActiveSessions(): Promise<ConversationSession[]>;
-  findByDateRange(startDate: Date, endDate: Date): Promise<ConversationSession[]>;
+  findByDateRange(
+    startDate: Date,
+    endDate: Date
+  ): Promise<ConversationSession[]>;
   getSessionsByState(state: ConversationState): Promise<ConversationSession[]>;
-  getSessionMetrics(timeframe: 'day' | 'week' | 'month'): Promise<SessionMetrics>;
+  getSessionMetrics(
+    timeframe: "day" | "week" | "month"
+  ): Promise<SessionMetrics>;
 }
 
 export interface MessageLogRepository {
   logMessage(message: CreateMessageLog): Promise<MessageLog>;
-  getConversationHistory(phoneNumber: string, limit?: number): Promise<MessageLog[]>;
+  getConversationHistory(
+    phoneNumber: string,
+    limit?: number
+  ): Promise<MessageLog[]>;
   getMessagesByDateRange(startDate: Date, endDate: Date): Promise<MessageLog[]>;
-  
+
   // Analytics queries
-  getMessageMetrics(timeframe: 'day' | 'week' | 'month'): Promise<MessageMetrics>;
+  getMessageMetrics(
+    timeframe: "day" | "week" | "month"
+  ): Promise<MessageMetrics>;
   getPopularProducts(): Promise<ProductPopularity[]>;
   getConversionFunnelData(): Promise<ConversionFunnel[]>;
 }
@@ -202,16 +224,24 @@ export interface MessageLogRepository {
 export interface HybridSessionManager {
   // Session Management
   getSession(phoneNumber: string): Promise<ConversationSession | null>;
-  createSession(phoneNumber: string, initialState?: ConversationState): Promise<ConversationSession>;
+  createSession(
+    phoneNumber: string,
+    initialState?: ConversationState
+  ): Promise<ConversationSession>;
   updateSession(session: ConversationSession): Promise<boolean>;
   deleteSession(phoneNumber: string): Promise<boolean>;
-  
+
   // Recovery Operations
-  restoreSessionFromDatabase(phoneNumber: string): Promise<ConversationSession | null>;
+  restoreSessionFromDatabase(
+    phoneNumber: string
+  ): Promise<ConversationSession | null>;
   syncActiveSessionsToDatabase(): Promise<number>;
-  
+
   // Analytics Support
-  getSessionHistory(phoneNumber: string, limit?: number): Promise<ConversationSession[]>;
+  getSessionHistory(
+    phoneNumber: string,
+    limit?: number
+  ): Promise<ConversationSession[]>;
   getActiveSessionsCount(): Promise<number>;
 }
 

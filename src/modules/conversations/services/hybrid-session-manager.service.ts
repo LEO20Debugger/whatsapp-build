@@ -116,7 +116,7 @@ export class HybridSessionManager {
       const now = new Date();
       const expiresAt = new Date(now.getTime() + this.defaultTtl * 1000);
 
-      // Create session object
+      // Create in-memory session object
       const session: ConversationSession = {
         phoneNumber,
         currentState: initialState,
@@ -125,13 +125,16 @@ export class HybridSessionManager {
       };
 
       // Save to database first (source of truth)
-      const dbSessionData = {
+      const dbSessionData: CreateConversationSession = {
         phoneNumber,
         customerId,
+        currentState: this.convertConversationStateToDbState(initialState),
+        context: {}, // empty JSON by default
+        lastActivity: now,
         expiresAt,
       };
 
-      const dbSession = await this.sessionRepository.create(dbSessionData);
+      await this.sessionRepository.create(dbSessionData);
 
       // Save to Redis for performance
       await this.saveSessionToRedis(session);
@@ -164,18 +167,17 @@ export class HybridSessionManager {
       // Update database first (source of truth)
       const dbSession = await this.getSessionFromDatabase(session.phoneNumber);
       if (dbSession) {
-        const updates: any = {
+        const updates: UpdateConversationSession = {
           context: session.context,
           lastActivity: session.lastActivity,
+          currentState: this.convertConversationStateToDbState(
+            session.currentState
+          ),
           expiresAt: new Date(
             session.lastActivity.getTime() + this.defaultTtl * 1000
           ),
+          ...(customerId ? { customerId } : {}),
         };
-
-        // Update customer_id if provided
-        if (customerId !== undefined) {
-          updates.customerId = customerId;
-        }
 
         await this.sessionRepository.update(dbSession.id, updates);
       }

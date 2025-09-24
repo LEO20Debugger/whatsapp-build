@@ -272,14 +272,20 @@ export class ConversationFlowService {
         formattedName
       );
 
+      // Fetch menu again
+      const browsingResponse = await this.handleBrowsingProductsState(
+        session,
+        parsedInput
+      );
+
       // Update session context
       session.context[ContextKey.CUSTOMER_NAME] = formattedName;
       session.context[ContextKey.CUSTOMER_INFO] = customer;
       session.context[ContextKey.IS_NEW_CUSTOMER] = false;
 
       return {
-        message: `🎉 *Welcome ${formattedName}!* 😊\n\n🍽️ Ready to explore our delicious menu?\n\nLet's find something tasty for you today!`,
-        nextState: ConversationState.ADDING_TO_CART,
+        message: `🎉 *Welcome ${formattedName}!* 😊\n\n🍽️ Ready to explore our delicious menu?\n\nLet's find something tasty for you today!\n\n${browsingResponse.message}`,
+        nextState: ConversationState.BROWSING_PRODUCTS,
         context: session.context,
       };
     } catch (error) {
@@ -549,7 +555,7 @@ export class ConversationFlowService {
 
     if (isNaN(quantity) || quantity < 1 || quantity > 99) {
       return {
-        message: `Please enter a valid quantity between 1 and 99.\n\n📦 How many **${selectedProduct.name}** would you like?\n\nOr type "no" if you're just browsing.`,
+        message: `Please enter a valid quantity between 1 and 99.\n\n📦 How many *${selectedProduct.name}* would you like?\n\nOr type "no" if you're just browsing.`,
       };
     }
 
