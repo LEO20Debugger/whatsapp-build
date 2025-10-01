@@ -6,6 +6,7 @@ import {
   WhatsAppApiResponse,
 } from "../interfaces/message.interface";
 import * as twilio from "twilio";
+import * as fs from 'fs/promises';
 
 @Injectable()
 export class WhatsAppMessageService {
@@ -149,6 +150,111 @@ export class WhatsAppMessageService {
     };
 
     return this.sendMessage(to, content);
+  }
+
+  /**
+   * Send PDF document via WhatsApp
+   */
+  async sendDocument(
+    to: string,
+    filePath: string,
+    fileName?: string,
+    caption?: string,
+  ): Promise<WhatsAppApiResponse> {
+    try {
+      this.validatePhoneNumber(to);
+
+      // Check if development mode is enabled
+      const devMode = this.configService.get<string>("WHATSAPP_DEV_MODE") === "true";
+      const nodeEnv = this.configService.get<string>("NODE_ENV");
+      
+      if (devMode || nodeEnv === "development") {
+        // Development mode: Log document sending instead of actually sending
+        this.logger.log(`🚀 DEV MODE - Would send document to ${to}:`);
+        this.logger.log(`📄 File: ${fileName || filePath}`);
+        this.logger.log(`💬 Caption: ${caption || 'No caption'}`);
+        
+        // Return mock response for development
+        return {
+          messaging_product: "whatsapp",
+          contacts: [{ input: to, wa_id: to }],
+          messages: [{ id: `dev_doc_${Date.now()}` }],
+        };
+      }
+
+      // Check if file exists
+      try {
+        await fs.access(filePath);
+      } catch {
+        throw new HttpException(
+          "Document file not found",
+          HttpStatus.NOT_FOUND,
+        );
+      }
+
+      const fromNumber = this.configService.get<string>(
+        "TWILIO_WHATSAPP_NUMBER",
+      );
+
+      if (!fromNumber) {
+        throw new HttpException(
+          "Twilio WhatsApp number not configured",
+          HttpStatus.INTERNAL_SERVER_ERROR,
+        );
+      }
+
+      // Format phone numbers for WhatsApp
+      const toNumber = this.formatWhatsAppNumber(to);
+
+      this.logger.log(`Sending document to ${to}: ${fileName || filePath}`);
+
+      // Create message with media
+      const messageOptions: any = {
+        from: fromNumber,
+        to: toNumber,
+        mediaUrl: [filePath], // For local files, this might need to be a URL
+      };
+
+      if (caption) {
+        messageOptions.body = caption;
+      }
+
+      const message = await this.twilioClient.messages.create(messageOptions);
+
+      this.logger.log(`Document sent successfully. Message ID: ${message.sid}`);
+
+      // Return in WhatsApp API format for compatibility
+      return {
+        messaging_product: "whatsapp",
+        contacts: [{ input: to, wa_id: to }],
+        messages: [{ id: message.sid }],
+      };
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      
+      // Check if it's a rate limit error and handle gracefully in dev mode
+      if (error.code === 63038 || error.status === 429) {
+        const devMode = this.configService.get<string>("WHATSAPP_DEV_MODE") === "true";
+        const nodeEnv = this.configService.get<string>("NODE_ENV");
+        
+        if (devMode || nodeEnv === "development") {
+          this.logger.warn(`⚠️ Rate limit hit - switching to dev mode for document to: ${to}`);
+          this.logger.log(`📄 Would send document: ${fileName || filePath}`);
+          
+          // Return mock response when rate limited in dev
+          return {
+            messaging_product: "whatsapp",
+            contacts: [{ input: to, wa_id: to }],
+            messages: [{ id: `rate_limited_doc_${Date.now()}` }],
+          };
+        }
+      }
+      
+      this.handleApiError(error, to, "document");
+      throw error;
+    }
   }
 
   private validatePhoneNumber(phoneNumber: string): void {

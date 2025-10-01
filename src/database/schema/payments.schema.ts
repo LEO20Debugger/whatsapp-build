@@ -17,9 +17,7 @@ export const paymentStatusEnum = pgEnum("payment_status", [
 ]);
 export const paymentMethodEnum = pgEnum("payment_method", [
   "bank_transfer",
-  "mobile_money",
   "card",
-  "cash",
 ]);
 
 export const payments = pgTable("payments", {

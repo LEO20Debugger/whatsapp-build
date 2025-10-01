@@ -1,10 +1,11 @@
-import { Module } from "@nestjs/common";
+import { Module, forwardRef } from "@nestjs/common";
 import { ConversationSessionService } from "./services/conversation-session.service";
 import { StateMachineService } from "./services/state-machine.service";
 import { InputParserService } from "./services/input-parser.service";
 import { ConversationFlowService } from "./services/conversation-flow.service";
 import { ConversationService } from "./services/conversation.service";
 import { OrderFlowService } from "./services/order-flow.service";
+import { PaymentFlowIntegrationService } from "./services/payment-flow-integration.service";
 import { HybridSessionManager } from "./services/hybrid-session-manager.service";
 import { MessageLoggingService } from "./services/message-logging.service";
 import { ConversationSessionRepository } from "./repositories/conversation-session.repository";
@@ -13,9 +14,11 @@ import { RedisModule } from "../../common/redis/redis.module";
 import { ProductsModule } from '../products/products.module';
 import { OrdersModule } from '../orders/orders.module';
 import { CustomersModule } from '../customers/customers.module';
+import { PaymentsModule } from '../payments/payments.module';
+import { WhatsAppModule } from '../whatsapp/whatsapp.module';
 
 @Module({
-  imports: [RedisModule, ProductsModule, OrdersModule, CustomersModule],
+  imports: [RedisModule, ProductsModule, OrdersModule, CustomersModule, PaymentsModule, forwardRef(() => WhatsAppModule)],
   controllers: [],
   providers: [
     ConversationSessionService,
@@ -24,6 +27,7 @@ import { CustomersModule } from '../customers/customers.module';
     ConversationFlowService,
     ConversationService,
     OrderFlowService,
+    PaymentFlowIntegrationService,
     HybridSessionManager,
     MessageLoggingService,
     ConversationSessionRepository,
@@ -36,6 +40,7 @@ import { CustomersModule } from '../customers/customers.module';
     ConversationFlowService,
     ConversationService,
     OrderFlowService,
+    PaymentFlowIntegrationService,
     HybridSessionManager,
     MessageLoggingService,
     ConversationSessionRepository,

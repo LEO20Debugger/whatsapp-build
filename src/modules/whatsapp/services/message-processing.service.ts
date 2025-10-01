@@ -3,7 +3,9 @@ import { IncomingMessage } from "../interfaces/whatsapp.interface";
 import { WhatsAppMessageService } from "./whatsapp-message.service";
 import { ConversationService } from "../../conversations/services/conversation.service";
 import { MessageLoggingService } from "../../conversations/services/message-logging.service";
-import { BotResponse } from "../../conversations/types/conversation.types";
+import { PaymentFlowIntegrationService } from "../../conversations/services/payment-flow-integration.service";
+import { BotResponse, ConversationState } from "../../conversations/types/conversation.types";
+import { ContextKey } from "../../conversations/types/state-machine.types";
 import {
   ParsedMessage,
   MessageType,
@@ -21,6 +23,7 @@ export class MessageProcessingService {
     private readonly whatsappMessageService: WhatsAppMessageService,
     private readonly conversationService: ConversationService,
     private readonly messageLoggingService: MessageLoggingService,
+    private readonly paymentFlowIntegrationService: PaymentFlowIntegrationService,
   ) {}
 
   /** Main entry point for processing incoming WhatsApp messages */
@@ -193,7 +196,7 @@ export class MessageProcessingService {
     try {
       // Handle non-text messages
       if (parsedMessage.type !== MessageType.TEXT) {
-        return this.handleNonTextMessage(parsedMessage);
+        return await this.handleNonTextMessage(parsedMessage);
       }
 
       // Process text message through conversation service
@@ -219,13 +222,10 @@ export class MessageProcessingService {
   }
 
   /** Handle non-text messages (images, documents, etc.) */
-  private handleNonTextMessage(parsedMessage: ParsedMessage): BotResponse {
+  private async handleNonTextMessage(parsedMessage: ParsedMessage): Promise<BotResponse> {
     switch (parsedMessage.type) {
       case MessageType.IMAGE:
-        return {
-          message:
-            "I received your image, but I can only process text messages right now. Please type what you'd like to order.",
-        };
+        return await this.handleImageMessage(parsedMessage);
 
       case MessageType.DOCUMENT:
         return {
@@ -244,6 +244,118 @@ export class MessageProcessingService {
           message:
             "I can only process text messages right now. Please type what you'd like to order.",
         };
+    }
+  }
+
+  /**
+   * Handle image messages - check if it's a receipt during payment confirmation
+   */
+  private async handleImageMessage(parsedMessage: ParsedMessage): Promise<BotResponse> {
+    try {
+      // Get current conversation session
+      const session = await this.conversationService.getConversationSession(parsedMessage.from);
+      
+      if (!session) {
+        return {
+          message: "I received your image, but I can only process text messages right now. Please type what you'd like to order.",
+        };
+      }
+
+      // Check if user is in payment confirmation state
+      if (session.currentState === ConversationState.PAYMENT_CONFIRMATION) {
+        const paymentReference = session.context[ContextKey.PAYMENT_REFERENCE];
+        
+        if (!paymentReference) {
+          return {
+            message: "I received your image, but I couldn't find your payment reference. Please try again or contact support.",
+          };
+        }
+
+        // Check if message has media URLs (receipt image)
+        if (parsedMessage.originalMessage.mediaUrls && parsedMessage.originalMessage.mediaUrls.length > 0) {
+          const imageUrl = parsedMessage.originalMessage.mediaUrls[0];
+          
+          // Process receipt image asynchronously
+          this.processReceiptImageAsync(parsedMessage.from, imageUrl, paymentReference);
+          
+          return {
+            message: `📸 *Processing your receipt...*\n\nI'm analyzing your image to verify the payment details. This may take a moment.\n\n⏳ Please wait for confirmation...`,
+          };
+        } else {
+          return {
+            message: `📸 *Receipt Required*\n\nPlease upload a clear photo of your bank transfer receipt showing:\n\n• Payment reference: ${paymentReference}\n• Transfer amount and details\n• "Successful" or "Completed" status\n\nOr type your transaction reference manually.`,
+          };
+        }
+      }
+
+      // Default response for images outside payment confirmation
+      return {
+        message: "I received your image, but I can only process text messages right now. Please type what you'd like to order.",
+      };
+    } catch (error) {
+      this.logger.error(`Error handling image message: ${error.message}`);
+      return {
+        message: "Sorry, I had trouble processing your image. Please try again or contact support.",
+      };
+    }
+  }
+
+  /**
+   * Process receipt image asynchronously to avoid blocking the webhook response
+   */
+  private async processReceiptImageAsync(
+    phoneNumber: string,
+    imageUrl: string,
+    paymentReference: string,
+  ): Promise<void> {
+    try {
+      this.logger.log(`🔄 Starting async receipt processing for ${phoneNumber}`);
+      this.logger.log(`📸 Image URL: ${imageUrl}`);
+      this.logger.log(`🔢 Payment Reference: ${paymentReference}`);
+
+      // Process the receipt image with timeout
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => {
+          this.logger.error(`⏰ Receipt processing timeout for ${phoneNumber}`);
+          reject(new Error('Receipt processing timeout after 30 seconds'));
+        }, 30000);
+      });
+
+      this.logger.log(`🚀 Calling PaymentFlowIntegrationService for ${phoneNumber}`);
+      
+      const result = await Promise.race([
+        this.paymentFlowIntegrationService.handleReceiptImageFromWhatsApp(
+          phoneNumber,
+          imageUrl,
+          paymentReference,
+        ),
+        timeoutPromise
+      ]);
+
+      this.logger.log(`📋 Receipt processing result for ${phoneNumber}: success=${result.success}`);
+
+      // Send the result back to the user
+      if (result.success) {
+        this.logger.log(`✅ Receipt verification successful for ${phoneNumber}`);
+        // The PaymentFlowIntegrationService already sends success messages via WhatsApp
+        // But let's also send the result message to ensure user gets feedback
+        await this.whatsappMessageService.sendTextMessage(phoneNumber, result.message);
+      } else {
+        this.logger.warn(`❌ Receipt verification failed for ${phoneNumber}: ${result.message}`);
+        // Send failure message to user
+        await this.whatsappMessageService.sendTextMessage(phoneNumber, result.message);
+      }
+    } catch (error) {
+      this.logger.error(`💥 Error in async receipt processing for ${phoneNumber}: ${error.message}`);
+      this.logger.error(`📊 Error stack: ${error.stack}`);
+      
+      // Send error message to user
+      try {
+        const errorMessage = `❌ *Processing Error*\n\nSorry, I had trouble processing your receipt image.\n\nPlease try:\n• Uploading the image again\n• Typing your transaction reference manually\n• Contacting support\n\n📞 Support: support@business.com`;
+        await this.whatsappMessageService.sendTextMessage(phoneNumber, errorMessage);
+      } catch (msgError) {
+        this.logger.error(`Failed to send error message: ${msgError.message}`);
+      }
     }
   }
 

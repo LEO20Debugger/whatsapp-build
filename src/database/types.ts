@@ -52,7 +52,7 @@ export type OrderStatus =
   | "completed"
   | "cancelled";
 export type PaymentStatus = "pending" | "verified" | "failed" | "refunded";
-export type PaymentMethod = "bank_transfer" | "mobile_money" | "card" | "cash";
+export type PaymentMethod = "bank_transfer" | "card";
 export type ConversationState =
   | "greeting"
   | "browsing_products"

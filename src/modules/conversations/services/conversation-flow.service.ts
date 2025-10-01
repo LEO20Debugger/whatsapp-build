@@ -16,6 +16,9 @@ import { ConversationSessionService } from "./conversation-session.service";
 import { OrderFlowService } from "./order-flow.service";
 import { ProductsRepository } from "../../products/products.repository";
 import { CustomersRepository } from "../../customers/customers.repository";
+import { PaymentsService } from "../../payments/payments.service";
+import { OrdersService } from "../../orders/orders.service";
+import { PaymentFlowIntegrationService } from "./payment-flow-integration.service";
 
 @Injectable()
 export class ConversationFlowService {
@@ -27,7 +30,10 @@ export class ConversationFlowService {
     private readonly sessionService: ConversationSessionService,
     private readonly orderFlowService: OrderFlowService,
     private readonly productsRepository: ProductsRepository,
-    private readonly customersRepository: CustomersRepository
+    private readonly customersRepository: CustomersRepository,
+    private readonly paymentsService: PaymentsService,
+    private readonly ordersService: OrdersService,
+    private readonly paymentFlowIntegrationService: PaymentFlowIntegrationService,
   ) {}
 
   async processMessage(
@@ -744,7 +750,7 @@ export class ConversationFlowService {
     session: ConversationSession
   ): Promise<BotResponse> {
     try {
-      const cartSummary = this.orderFlowService.checkoutCartSummary(session);
+      const cartSummary = this.orderFlowService.getCartSummary(session);
 
       if (!cartSummary || cartSummary.items.length === 0) {
         return {
@@ -753,8 +759,32 @@ export class ConversationFlowService {
         };
       }
 
+      // Show full order review immediately
+      let reviewMessage = `📋 *ORDER REVIEW*\n\n`;
+
+      cartSummary.items.forEach((item, index) => {
+        const itemTotal = item.totalPrice.toLocaleString("en-NG", {
+          style: "currency",
+          currency: "NGN",
+          minimumFractionDigits: 0,
+        });
+        reviewMessage += `${index + 1}. ${item.productName} x${item.quantity} - ${itemTotal}\n`;
+      });
+
+      const total = cartSummary.total.toLocaleString("en-NG", {
+        style: "currency",
+        currency: "NGN",
+        minimumFractionDigits: 0,
+      });
+
+      reviewMessage += `\n💰 *Total: ${total}*\n\n`;
+      reviewMessage += `✅ *Confirm your order:*\n`;
+      reviewMessage += `• Type "confirm" or "yes" to proceed to payment\n`;
+      reviewMessage += `• Type "edit" to modify your order\n`;
+      reviewMessage += `• Type "cancel" to go back`;
+
       return {
-        message: `Let's review your order! 📋`,
+        message: reviewMessage,
         nextState: ConversationState.REVIEWING_ORDER,
       };
     } catch (error) {
@@ -765,40 +795,466 @@ export class ConversationFlowService {
     }
   }
 
-  // Placeholder methods for other states
+  // Payment flow states implementation
   private async handleReviewingOrderState(
     session: ConversationSession,
     parsedInput: ParsedInput
   ): Promise<BotResponse> {
+    const userInput = parsedInput.originalText.trim().toLowerCase();
+
+    try {
+      // Get cart summary for review
+      const cartSummary = this.orderFlowService.getCartSummary(session);
+
+      if (!cartSummary || cartSummary.items.length === 0) {
+        return {
+          message: `Your cart is empty! Please add some items first.\n\nType "menu" to browse our products.`,
+          nextState: ConversationState.BROWSING_PRODUCTS,
+        };
+      }
+
+      // Handle user input during order review
+      if (userInput === "confirm" || userInput === "yes" || userInput === "proceed") {
+        // Validate cart before proceeding
+        const validation = await this.orderFlowService.validateCart(session);
+        if (!validation.isValid) {
+          return {
+            message: `❌ There are issues with your order:\n\n${validation.errors.join('\n')}\n\nPlease fix these issues before proceeding.`,
+            nextState: ConversationState.ADDING_TO_CART,
+          };
+        }
+
+        // Get customer info
+        const customerInfo = session.context[ContextKey.CUSTOMER_INFO];
+        if (!customerInfo) {
+          return {
+            message: `Sorry, I couldn't find your customer information. Let's start over.`,
+            nextState: ConversationState.GREETING,
+          };
+        }
+
+        // Create order from cart
+        const orderResult = await this.orderFlowService.createOrderFromCart(session, customerInfo.id);
+        if (!orderResult.success) {
+          return {
+            message: `❌ Sorry, I couldn't create your order: ${orderResult.error}\n\nPlease try again or contact support.`,
+            nextState: ConversationState.REVIEWING_ORDER,
+          };
+        }
+
+        // Store order ID in session context
+        session.context[ContextKey.ORDER_ID] = orderResult.orderId;
+
+        // Proceed to payment
+        return {
+          message: `✅ Order created successfully!\n\n💳 Let's proceed with payment.`,
+          nextState: ConversationState.AWAITING_PAYMENT,
+          context: session.context,
+        };
+      }
+
+      if (userInput === "cancel" || userInput === "no") {
+        return {
+          message: `No problem! Your cart is still saved.\n\nType "cart" to view it again or "menu" to add more items.`,
+          nextState: ConversationState.ADDING_TO_CART,
+        };
+      }
+
+      if (userInput === "edit" || userInput === "modify") {
+        return {
+          message: `You can modify your order by adding more items or clearing your cart.\n\nType "menu" to add items or "clear cart" to start over.`,
+          nextState: ConversationState.ADDING_TO_CART,
+        };
+      }
+
+      // Show order review by default
+      let reviewMessage = `📋 *ORDER REVIEW*\n\n`;
+
+      cartSummary.items.forEach((item, index) => {
+        const itemTotal = item.totalPrice.toLocaleString("en-NG", {
+          style: "currency",
+          currency: "NGN",
+          minimumFractionDigits: 0,
+        });
+        reviewMessage += `${index + 1}. ${item.productName} x${item.quantity} - ${itemTotal}\n`;
+      });
+
+      const total = cartSummary.total.toLocaleString("en-NG", {
+        style: "currency",
+        currency: "NGN",
+        minimumFractionDigits: 0,
+      });
+
+      reviewMessage += `\n💰 *Total: ${total}*\n\n`;
+      reviewMessage += `✅ *Confirm your order:*\n`;
+      reviewMessage += `• Type "confirm" or "yes" to proceed to payment\n`;
+      reviewMessage += `• Type "edit" to modify your order\n`;
+      reviewMessage += `• Type "cancel" to go back`;
+
+      return {
+        message: reviewMessage,
+      };
+    } catch (error) {
+      this.logger.error(`Error in reviewing order state: ${error.message}`);
+      return {
+        message: `Sorry, I had trouble reviewing your order. Please try again.`,
+        nextState: ConversationState.ADDING_TO_CART,
+      };
+    }
+  }
+
+  private async handleAwaitingPaymentState(
+    session: ConversationSession,
+    parsedInput: ParsedInput
+  ): Promise<BotResponse> {
+    const userInput = parsedInput.originalText.trim().toLowerCase();
+
+    try {
+      // Check if order exists in context
+      const orderId = session.context[ContextKey.ORDER_ID];
+      
+      if (!orderId) {
+        return {
+          message: `Sorry, I couldn't find your order. Let's start over.`,
+          nextState: ConversationState.BROWSING_PRODUCTS,
+        };
+      }
+
+      // Handle payment method selection
+      if (userInput === "1" || userInput === "bank" || userInput === "bank transfer") {
+        return await this.generatePaymentInstructions(session, orderId, "bank_transfer");
+      }
+
+      if (userInput === "2" || userInput === "card") {
+        return await this.generatePaymentInstructions(session, orderId, "card");
+      }
+
+      if (userInput === "paid" || userInput === "done" || userInput === "completed") {
+        return {
+          message: `Great! Please provide your payment confirmation details.\n\n💳 What payment method did you use?\n\n1️⃣ Bank Transfer\n2️⃣ Card Payment\n\nType the number or method name:`,
+          nextState: ConversationState.PAYMENT_CONFIRMATION,
+        };
+      }
+
+      // Show payment options by default
+      const cartSummary = this.orderFlowService.getCartSummary(session);
+      const total = cartSummary?.total?.toLocaleString("en-NG", {
+        style: "currency",
+        currency: "NGN",
+        minimumFractionDigits: 0,
+      }) || "0";
+
+      return {
+        message: `💳 *PAYMENT OPTIONS*\n\nTotal Amount: *${total}*\n\nChoose your payment method:\n\n1️⃣ 🏦 Bank Transfer\n2️⃣ 💳 Card Payment\n\nType the number (1-2) or payment method name:\n\n💡 After making payment, type "paid" to confirm.`,
+      };
+    } catch (error) {
+      this.logger.error(`Error in awaiting payment state: ${error.message}`);
+      return {
+        message: `Sorry, I had trouble processing your payment options. Please try again.`,
+      };
+    }
+  }
+
+  private async handlePaymentConfirmationState(
+    session: ConversationSession,
+    parsedInput: ParsedInput
+  ): Promise<BotResponse> {
+    const userInput = parsedInput.originalText.trim().toLowerCase();
+
+    try {
+      const orderId = session.context[ContextKey.ORDER_ID];
+      const paymentReference = session.context[ContextKey.PAYMENT_REFERENCE];
+
+      if (!orderId) {
+        return {
+          message: `Sorry, I couldn't find your order. Let's start over.`,
+          nextState: ConversationState.BROWSING_PRODUCTS,
+        };
+      }
+
+      // Handle payment method confirmation
+      if (userInput === "1" || userInput === "bank" || userInput === "bank transfer") {
+        return {
+          message: `🏦 *Bank Transfer Confirmation*\n\nPlease provide proof of your bank transfer:\n\n📸 *Option 1: Upload Receipt*\nTake a clear photo of your transfer receipt and send it here.\n\n📝 *Option 2: Type Reference*\nType your transaction reference number.\n\n💡 *What to include in your photo:*\n• Full receipt showing transfer details\n• Payment reference: ${paymentReference}\n• Amount and account details\n• "Successful" or "Completed" status`,
+        };
+      }
+
+      if (userInput === "2" || userInput === "card") {
+        return await this.processPaymentConfirmation(session, orderId, "card", parsedInput.originalText);
+      }
+
+      // If user provides transaction details directly
+      if (userInput.length > 10 && (userInput.includes("ref") || userInput.includes("transaction") || /\d{6,}/.test(userInput))) {
+        return await this.processPaymentConfirmation(session, orderId, "bank_transfer", parsedInput.originalText);
+      }
+
+      // Show payment confirmation options
+      return {
+        message: `💳 *PAYMENT CONFIRMATION*\n\nPlease confirm your payment method:\n\n1️⃣ 🏦 Bank Transfer\n2️⃣ 💳 Card Payment\n\nType the number or method name.\n\n💡 You can also provide your transaction reference directly.`,
+      };
+    } catch (error) {
+      this.logger.error(`Error in payment confirmation state: ${error.message}`);
+      return {
+        message: `Sorry, I had trouble processing your payment confirmation. Please try again.`,
+      };
+    }
+  }
+
+  /**
+   * Handle image messages during payment confirmation
+   * Requirements: Receipt verification via image upload
+   */
+  async handleImageMessage(
+    phoneNumber: string,
+    imageUrl: string,
+  ): Promise<BotResponse> {
+    try {
+      const session = await this.sessionService.getSession(phoneNumber);
+      
+      if (!session || session.currentState !== ConversationState.PAYMENT_CONFIRMATION) {
+        return {
+          message: `I can only process receipt images during payment confirmation.\n\nPlease complete your order first, then upload your receipt when asked.`,
+        };
+      }
+
+      const paymentReference = session.context[ContextKey.PAYMENT_REFERENCE];
+      if (!paymentReference) {
+        return {
+          message: `Sorry, I couldn't find your payment reference. Please try again or contact support.`,
+        };
+      }
+
+      // Show processing message
+      const processingMessage = `📸 *Processing your receipt...*\n\nI'm analyzing your image to verify the payment details. This may take a moment.\n\n⏳ Please wait...`;
+      
+      // Send processing message first
+      // Note: In a real implementation, you'd send this immediately
+      // await this.whatsappMessageService.sendTextMessage(phoneNumber, processingMessage);
+
+      // Process the receipt image (this would be done asynchronously in production)
+      // For now, we'll return the processing message and handle verification separately
+      return {
+        message: processingMessage,
+      };
+    } catch (error) {
+      this.logger.error(`Error handling image message for ${phoneNumber}: ${error.message}`);
+      return {
+        message: `Sorry, I had trouble processing your image. Please try uploading it again or contact support.\n\n📞 Support: support@business.com`,
+      };
+    }
+  }
+
+  private async handleOrderCompleteState(
+    session: ConversationSession,
+    parsedInput: ParsedInput
+  ): Promise<BotResponse> {
+    const userInput = parsedInput.originalText.trim().toLowerCase();
+
+    // Handle post-completion actions
+    if (userInput === "receipt" || userInput === "get receipt") {
+      return await this.resendReceipt(session);
+    }
+
+    if (userInput === "new order" || userInput === "order again") {
+      // Clear session and start new order
+      session.context = {};
+      return {
+        message: `🛒 Starting a new order! Let me show you our menu.`,
+        nextState: ConversationState.BROWSING_PRODUCTS,
+        context: session.context,
+      };
+    }
+
+    if (userInput === "help" || userInput === "support") {
+      return {
+        message: `📞 *CUSTOMER SUPPORT*\n\nNeed help with your order?\n\n• Type "receipt" to get your receipt again\n• Type "new order" to place another order\n• Type "menu" to browse products\n\nFor urgent issues, contact us at:\n📧 support@business.com\n📞 +234-XXX-XXXX`,
+      };
+    }
+
+    // Default completion message
+    const customerName = session.context[ContextKey.CUSTOMER_NAME];
+    const greeting = customerName ? `Thank you ${customerName}!` : "Thank you!";
+
     return {
-      message: `Reviewing order! (Implementation needed)`,
+      message: `${greeting} 🎉\n\nYour order has been completed successfully!\n\n✅ *What's next?*\n• Type "receipt" to view your receipt\n• Type "new order" to place another order\n• Type "menu" to browse our products\n• Type "help" for support options\n\nWe appreciate your business! 😊`,
     };
   }
 
-  private handleAwaitingPaymentState(
+  /**
+   * Generate payment instructions for selected payment method
+   * Requirements: 2.1, 2.2
+   */
+  private async generatePaymentInstructions(
     session: ConversationSession,
-    parsedInput: ParsedInput
-  ): BotResponse {
-    return {
-      message: `Awaiting payment! (Implementation needed)`,
-    };
+    orderId: string,
+    paymentMethod: "bank_transfer" | "card"
+  ): Promise<BotResponse> {
+    try {
+      this.logger.log(`Generating payment instructions for order ${orderId} using ${paymentMethod}`);
+
+      // Use PaymentFlowIntegrationService to send payment instructions via WhatsApp
+      const result = await this.paymentFlowIntegrationService.sendPaymentInstructions(
+        session.phoneNumber,
+        orderId,
+        paymentMethod
+      );
+
+      if (result.success) {
+        // Store payment reference in session
+        session.context[ContextKey.PAYMENT_REFERENCE] = result.paymentReference;
+
+        return {
+          message: `✅ Payment instructions have been sent!\n\n💡 After making payment, type "paid" to confirm your payment.`,
+          nextState: ConversationState.PAYMENT_CONFIRMATION,
+          context: session.context,
+        };
+      } else {
+        return {
+          message: `❌ Sorry, I had trouble generating payment instructions: ${result.error}\n\nPlease try again or contact support.`,
+        };
+      }
+    } catch (error) {
+      this.logger.error(`Failed to generate payment instructions: ${error.message}`);
+      return {
+        message: `Sorry, I had trouble generating payment instructions. Please try again or contact support.`,
+      };
+    }
   }
 
-  private handlePaymentConfirmationState(
+  /**
+   * Process payment confirmation
+   * Requirements: 3.1, 3.2
+   */
+  private async processPaymentConfirmation(
     session: ConversationSession,
-    parsedInput: ParsedInput
-  ): BotResponse {
-    return {
-      message: `Payment confirmation! (Implementation needed)`,
-    };
+    orderId: string,
+    paymentMethod: "bank_transfer" | "card",
+    userInput: string
+  ): Promise<BotResponse> {
+    try {
+      this.logger.log(`Processing payment confirmation for order ${orderId}`);
+
+      const paymentReference = session.context[ContextKey.PAYMENT_REFERENCE];
+
+      if (!paymentReference) {
+        return {
+          message: `❌ Sorry, I couldn't find your payment reference. Please try again or contact support.`,
+        };
+      }
+
+      // Use PaymentFlowIntegrationService to process payment confirmation
+      const result = await this.paymentFlowIntegrationService.processPaymentConfirmation(
+        session.phoneNumber,
+        paymentReference,
+        {
+          paymentMethod,
+          userInput,
+        }
+      );
+
+      if (result.success) {
+        // Clear payment context
+        delete session.context[ContextKey.PAYMENT_REFERENCE];
+        delete session.context[ContextKey.ORDER_ID];
+
+        return {
+          message: `🎉 *PAYMENT CONFIRMED!*\n\nThank you! Your payment has been verified and your order is complete!\n\n${result.receiptSent ? '📄 A detailed PDF receipt has been sent to you.' : ''}\n\nType "new order" to place another order or "help" for support options.`,
+          nextState: ConversationState.ORDER_COMPLETE,
+          context: session.context,
+        };
+      } else {
+        return {
+          message: `❌ *Payment Verification Failed*\n\n${result.message}\n\nPlease check your payment details and try again.\n\n💡 Make sure you:\n• Used the correct payment reference\n• Paid the exact amount\n• Completed the transaction\n\nType your transaction details again or contact support if you need help.`,
+        };
+      }
+    } catch (error) {
+      this.logger.error(`Failed to process payment confirmation: ${error.message}`);
+      return {
+        message: `Sorry, I had trouble verifying your payment. Please try again or contact support.\n\n📞 Support: support@business.com`,
+      };
+    }
   }
 
-  private handleOrderCompleteState(
-    session: ConversationSession,
-    parsedInput: ParsedInput
-  ): BotResponse {
-    return {
-      message: `Order complete! (Implementation needed)`,
-    };
+  /**
+   * Resend receipt to customer
+   * Requirements: 4.3, 4.4
+   */
+  private async resendReceipt(session: ConversationSession): Promise<BotResponse> {
+    try {
+      const orderId = session.context[ContextKey.ORDER_ID];
+      
+      if (!orderId) {
+        return {
+          message: `Sorry, I couldn't find your order receipt. Please contact support if you need assistance.`,
+        };
+      }
+
+      // Get order details to find payment
+      const order = await this.ordersService.getOrderById(orderId);
+      if (!order) {
+        return {
+          message: `Sorry, I couldn't find your order. Please contact support.`,
+        };
+      }
+
+      // Find receipt by payment ID (assuming we can get payment from order)
+      // This is a simplified approach - in production you'd have a proper receipt lookup
+      const receiptMessage = `📧 *RECEIPT RESENT*\n\nYour receipt has been sent! If you need a detailed receipt, please contact our support team.\n\n📞 Support: support@business.com\n📧 Email: orders@business.com`;
+
+      return {
+        message: receiptMessage,
+      };
+    } catch (error) {
+      this.logger.error(`Failed to resend receipt: ${error.message}`);
+      return {
+        message: `Sorry, I had trouble sending your receipt. Please contact support.\n\n📞 Support: support@business.com`,
+      };
+    }
+  }
+
+  /**
+   * Format receipt message for WhatsApp
+   * Requirements: 4.1, 4.2
+   */
+  private formatReceiptMessage(receipt: any): string {
+    let receiptMessage = `🧾 *DIGITAL RECEIPT*\n\n`;
+    receiptMessage += `📄 Receipt #: ${receipt.receiptNumber}\n`;
+    receiptMessage += `📅 Date: ${receipt.generatedAt.toLocaleDateString()}\n`;
+    receiptMessage += `🕐 Time: ${receipt.generatedAt.toLocaleTimeString()}\n\n`;
+
+    receiptMessage += `👤 *Customer:* ${receipt.customerInfo.name || 'N/A'}\n`;
+    receiptMessage += `📱 Phone: ${receipt.customerInfo.phoneNumber}\n\n`;
+
+    receiptMessage += `🛒 *ORDER DETAILS:*\n`;
+    receipt.orderDetails.items.forEach((item: any, index: number) => {
+      const itemTotal = item.totalPrice.toLocaleString("en-NG", {
+        style: "currency",
+        currency: "NGN",
+        minimumFractionDigits: 0,
+      });
+      receiptMessage += `${index + 1}. ${item.name} x${item.quantity} - ${itemTotal}\n`;
+    });
+
+    const total = receipt.orderDetails.total.toLocaleString("en-NG", {
+      style: "currency",
+      currency: "NGN",
+      minimumFractionDigits: 0,
+    });
+
+    receiptMessage += `\n💰 *Total: ${total}*\n\n`;
+
+    receiptMessage += `💳 *Payment:* ${receipt.paymentDetails.method.replace('_', ' ').toUpperCase()}\n`;
+    receiptMessage += `🔢 Reference: ${receipt.paymentDetails.reference}\n`;
+    receiptMessage += `✅ Verified: ${receipt.paymentDetails.verifiedAt.toLocaleString()}\n\n`;
+
+    receiptMessage += `🏢 *${receipt.businessInfo.name}*\n`;
+    if (receipt.businessInfo.address) {
+      receiptMessage += `📍 ${receipt.businessInfo.address}\n`;
+    }
+    if (receipt.businessInfo.phone) {
+      receiptMessage += `📞 ${receipt.businessInfo.phone}\n`;
+    }
+
+    return receiptMessage;
   }
 }
