@@ -53,7 +53,7 @@ State: ADDING_TO_CART
 
 ## 📁 Module Documentation
 
-### 🗣️ Conversations Module
+### Conversations Module
 **Location**: `src/modules/conversations/`
 
 Core conversation management with state machine implementation.
